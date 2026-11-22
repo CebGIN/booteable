@@ -1,0 +1,33 @@
+# Build y artefactos
+build/
+build-*/
+*.o
+*.a
+*.so
+*.d
+compile_commands.json
+
+# Imágenes y binarios de arranque
+*.img
+*.iso
+*.efi
+*.bin
+*.vhd
+
+# Herramientas y cachés locales
+.cache/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Registros y exportaciones de pruebas
+*.log
+resultados/
+
+# Instrucciones internas del agente (no trackear)
+AGENTS.md
+
+# Python
+__pycache__/
+*.pyc
