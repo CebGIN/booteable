@@ -401,6 +401,12 @@ mayor capacidad que la imagen de prueba, la TUI construye la imagen con
 el último LBA físico. Para QEMU/CLI se usa `--size-mb` y ese es el tamaño del
 archivo.
 
+Cuando `esp_bytes = 0` y el valor por defecto no entra en un disco pequeño
+(por ejemplo, una imagen de 64 MiB con ESP automática de 64 MiB), el tamaño se
+reduce al mayor que quepa antes de la GPT de respaldo, siempre por encima del
+mínimo FAT32. Si el usuario pide `--esp-mib` explícito y no entra, el build
+falla: no se recorta una elección explícita.
+
 El archivo se crea con `ftruncate(disk_bytes)` y solo se escriben las regiones
 con contenido (MBR, GPT primaria, ESP y GPT de respaldo). En un sistema de
 archivos con soporte de *sparse files* una imagen de 64 GB ocupa unos pocos MiB;

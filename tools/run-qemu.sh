@@ -3,7 +3,8 @@
 #
 # La ESP de prueba se arma con el directorio build/esp y la opción `fat:rw:`
 # de QEMU; no se necesita mkfs.vfat, mtools ni root. En modo headless el
-# programa debe imprimir BOOTEABLE-BOOT-OK por la consola serie.
+# programa debe imprimir BOOTEABLE-BOOT-OK por la consola serie. Con --image se
+# arranca la imagen GPT/FAT32 completa construida por booteable-image.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,7 +17,9 @@ TIMEOUT_SECONDS="${QEMU_TIMEOUT:-30}"
 WAIT_SHUTDOWN_SECONDS="${QEMU_SHUTDOWN_TIMEOUT:-20}"
 HEADLESS=0
 MARKER="${QEMU_MARKER:-BOOTEABLE-BOOT-OK}"
+IMAGE=""
 SECURE_BOOT=0
+SECTOR_SIZE=512
 
 usage() {
     cat <<'EOF'
@@ -26,6 +29,10 @@ Uso: tools/run-qemu.sh [opciones]
                       el marcador.
   --timeout N         Segundos antes de terminar QEMU (por defecto 30).
   --efi RUTA          Binario EFI a arrancar (por defecto build/efi/BOOTX64.EFI).
+  --image RUTA        Arranca desde una imagen GPT/FAT32 completa en vez de la
+                      carpeta build/esp.
+  --sector-size N     Sector lógico de la imagen: 512 (por defecto) o 4096.
+                      4Kn se presenta con virtio-blk de bloque lógico 4096.
   --secure-boot       Prueba negativa: usa OVMF con Secure Boot activo y exige
                       que el binario sin firma NO arranque.
   --log RUTA          Archivo de salida serie (por defecto build/qemu-serial.log).
@@ -48,6 +55,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --efi)
             EFI="$2"
+            shift 2
+            ;;
+        --image)
+            IMAGE="$2"
+            shift 2
+            ;;
+        --sector-size)
+            SECTOR_SIZE="$2"
             shift 2
             ;;
         --secure-boot)
@@ -75,7 +90,17 @@ if ! command -v "$QEMU" >/dev/null 2>&1; then
     exit 77
 fi
 
-if [[ ! -f "$EFI" ]]; then
+if [[ "$SECTOR_SIZE" != "512" && "$SECTOR_SIZE" != "4096" ]]; then
+    echo "--sector-size debe ser 512 o 4096." >&2
+    exit 2
+fi
+
+if [[ -n "$IMAGE" ]]; then
+    if [[ ! -f "$IMAGE" ]]; then
+        echo "Falta la imagen '$IMAGE'. Construila con booteable-image." >&2
+        exit 1
+    fi
+elif [[ ! -f "$EFI" ]]; then
     echo "Falta '$EFI'. Compilá primero con: cmake --build build" >&2
     exit 1
 fi
@@ -157,11 +182,23 @@ if [[ "$SECURE_BOOT" -eq 1 ]]; then
     QEMU_ARGS+=(-global driver=cfi.pflash01,property=secure,value=on)
 fi
 
-# La ESP temporal se arma con el directorio build/esp y la opción `fat:rw:` de
-# QEMU; no se necesita mkfs.vfat, mtools ni root.
-mkdir -p "$ESP_DIR/EFI/BOOT"
-cp -f "$EFI" "$ESP_DIR/EFI/BOOT/BOOTX64.EFI"
-QEMU_ARGS+=(-drive "file=fat:rw:$ESP_DIR,format=raw")
+if [[ -n "$IMAGE" ]]; then
+    # La imagen ya contiene MBR, GPT y la ESP FAT32 con BOOTX64.EFI. Para 4Kn
+    # se usa virtio-blk con bloque lógico de 4096; el firmware ve un disco 4Kn.
+    if [[ "$SECTOR_SIZE" == "4096" ]]; then
+        QEMU_ARGS+=(
+            -drive "file=$IMAGE,format=raw,if=none,id=bootdisk"
+            -device "virtio-blk-pci,drive=bootdisk,logical_block_size=4096,physical_block_size=4096")
+    else
+        QEMU_ARGS+=(-drive "file=$IMAGE,format=raw")
+    fi
+else
+    # Sin imagen: se arma una ESP temporal con el directorio build/esp y la
+    # opción `fat:rw:` de QEMU; no se necesita mkfs.vfat, mtools ni root.
+    mkdir -p "$ESP_DIR/EFI/BOOT"
+    cp -f "$EFI" "$ESP_DIR/EFI/BOOT/BOOTX64.EFI"
+    QEMU_ARGS+=(-drive "file=fat:rw:$ESP_DIR,format=raw")
+fi
 
 if [[ "$HEADLESS" -eq 0 && -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
     HEADLESS=1
