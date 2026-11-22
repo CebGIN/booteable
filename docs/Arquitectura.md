@@ -106,7 +106,8 @@ La aplicación:
 2. Limpia la consola y fija colores con `ConOut->SetAttribute`.
 3. Imprime el mensaje del grupo y el identificador de compilación.
 4. Escribe el mismo texto en el puerto serie si `SerialIo` está disponible.
-5. Espera una tecla con `ConIn->WaitForKey` y `ConIn->ReadKeyStroke`.
+5. Espera una tecla con `ConIn->ReadKeyStroke`, sondeando con `BS->Stall`
+   durante 10 segundos; si no hay tecla, apaga igual.
 6. Apaga el equipo con `ST->RuntimeServices->ResetSystem(EfiResetShutdown, ...)`.
 
 Apagar es el comportamiento provisional mientras el resto del proyecto no esté
