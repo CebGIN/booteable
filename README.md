@@ -17,10 +17,11 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 
 ## Estado
 
-**Diseño para implementación.** Este repositorio contiene por ahora el enunciado,
-los requerimientos derivados, la arquitectura, el glosario, el plan de trabajo y
-el diagrama. Todavía no hay código ni submódulo del motor; el plan indica en qué
-orden se agregan.
+**WP0 implementado.** Ya existen los contratos de `src/domain/`, el esqueleto
+CMake, el programa EFI mínimo (`BOOTX64.EFI`) incrustado en el preparador, la
+prueba en QEMU/OVMF y una escena mínima de Guayaba. La construcción GPT/FAT32,
+la enumeración real de dispositivos y la CLI son los siguientes paquetes (WP2,
+WP3 y WP4); por ahora `booteable-image` solo muestra su ayuda.
 
 La ruta elegida es **UEFI x86_64** con tabla **GPT** y una **ESP FAT32** que
 contiene `\EFI\BOOT\BOOTX64.EFI`. Es la ruta que el equipo de prueba admite y la
@@ -42,33 +43,36 @@ física.
 - CMake 3.20 o superior.
 - Compilador con C++17.
 - `x86_64-w64-mingw32-gcc/g++` para construir la aplicación EFI.
+- Python 3.8 o superior, para generar el EFI incrustado en tiempo de compilación.
 - Git, para el submódulo del motor.
 - Opcional: QEMU + OVMF para la prueba virtual.
 - Opcional: `draw.io` 24 o superior para editar/exportar el diagrama.
 
-## Compilar (planificado)
+## Compilar
 
 ```bash
 git submodule update --init --recursive
 cmake -S . -B build
 cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-Targets previstos:
+Targets:
 
 | Target | Descripción |
 |---|---|
-| `booteable_core` | Núcleo headless: dominio, imagen GPT/FAT32, dispositivos, verificador |
+| `booteable_core` | Núcleo headless: dominio, contratos, fake y EFI incrustado |
 | `booteable_ui` | Escenas de la TUI sobre Guayaba |
 | `booteable` | Aplicación TUI |
 | `booteable-image` | CLI headless para construir, verificar y escribir una imagen |
-| `bootx64.efi` | Aplicación EFI que arranca el firmware |
+| `bootx64_efi` | Aplicación EFI que arranca el firmware |
 | `booteable_tests` | Suites headless registradas en CTest |
 
 La aplicación EFI se compila con el *cross-compiler* de MinGW-w64
 (`-ffreestanding -nostdlib -Wl,--subsystem,10`) y se **incrusta** en el
-preparador como un arreglo de bytes. Así el binario de la TUI es autocontenido y
-no depende de encontrar `BOOTX64.EFI` en el disco.
+preparador como un arreglo de bytes. `tools/embed-efi.py` genera el arreglo, su
+tamaño y el SHA-256 en `build/generated/EmbeddedBootImage.cpp`. Así el binario de
+la TUI es autocontenido y no depende de encontrar `BOOTX64.EFI` en el disco.
 
 La imagen se crea como archivo disperso del tamaño del destino y solo se
 escriben las regiones con contenido (MBR, GPT, ESP y GPT de respaldo). Preparar
@@ -84,18 +88,18 @@ de detectar, particionar, formatear, escribir, sincronizar y verificar las hace
 nuestro código. Por eso GPT y FAT32 se generan en `image/` y no se invocan
 `parted`, `mkfs.*` ni `dd` como binarios externos.
 
-## Ejecutar (planificado)
+## Ejecutar
 
 ```bash
-sudo ./build/booteable
+./build/booteable        # WP0: escena mínima con datos simulados; F10 sale
 ```
 
-La TUI enumera las USB, muestra identificador, capacidad, serie, puntos de
-montaje y la etiqueta/tamaño elegidos; exige marcar una casilla de advertencia y
-pulsar `Enter` antes de escribir. Sin privilegios se puede explorar y exportar
-una imagen, pero no escribir un dispositivo.
+En WP4 la TUI va a enumerar las USB, mostrar identificador, capacidad, serie,
+puntos de montaje y la etiqueta/tamaño elegidos, y exigir la casilla de
+advertencia más `Enter` antes de escribir. Sin privilegios se podrá explorar y
+exportar una imagen, pero no escribir un dispositivo.
 
-Para trabajar sin terminal o en pruebas:
+Cuando WP2 y WP3b estén implementados, la CLI ofrecerá:
 
 ```bash
 # Construir una imagen de disco reproducible
@@ -114,31 +118,30 @@ sudo ./build/booteable-image flash --device /dev/sdX --image build/booteable.img
 
 ## Prueba virtual
 
-Antes de la USB física, la imagen se arranca en QEMU con OVMF:
+El programa EFI se compila e incrusta en cada build. Para arrancarlo en QEMU con
+OVMF sin tocar hardware:
 
 ```bash
-./tools/run-qemu.sh build/booteable.img
+./tools/run-qemu.sh --headless
 ```
 
-El programa de arranque escribe el mismo mensaje en la consola UEFI y en el
-puerto serie, de modo que la prueba también puede capturarse sin ventana:
+El script detecta OVMF (`/usr/share/OVMF/OVMF_CODE_4M.fd`, `OVMF_CODE.fd` o las
+variables `OVMF_CODE`/`OVMF_VARS`), arma una ESP temporal con `fat:rw:` y busca
+el marcador `WP0-BOOT-OK` en la consola serie. Si faltan QEMU u OVMF, sale con
+código 77 para que CTest lo salte.
 
-```bash
-./tools/run-qemu.sh build/booteable.img --headless
-```
+Cuando WP2 construya la imagen completa, se podrá pasar el archivo con
+`--efi`/`ESP_DIR`; el arranque final buscará `BOOTEABLE-BOOT-OK`.
 
-Criterio de éxito: aparece el marcador `BOOTEABLE-BOOT-OK` junto con el nombre
-del grupo y el hash de compilación.
-
-## Pruebas (planificadas)
+## Pruebas
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
-Las pruebas son headless, no requieren red, root ni una USB real. Las que
-necesitan un dispositivo de bloque usan un archivo regular o un dispositivo falso;
-la prueba QEMU se registra como opcional y se salta si faltan QEMU u OVMF.
+Las pruebas son headless, no requieren red, root ni una USB real. La suite
+`unit` cubre validación y el controlador falso; `qemu_boot` arranca el EFI en
+OVMF y se salta si faltan QEMU u OVMF.
 
 ## Diagrama
 
