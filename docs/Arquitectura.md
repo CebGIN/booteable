@@ -146,18 +146,19 @@ BOOTEABLE-BOOT-OK
 ```bash
 x86_64-w64-mingw32-g++ \
   -std=c++17 -ffreestanding -fno-exceptions -fno-rtti \
-  -fno-stack-protector -mno-red-zone -maccumulate-outgoing-args \
-  -nostdlib -Wl,--subsystem,10 -Wl,-e,efi_main \
+  -fno-stack-protector -fno-use-cxa-atexit -fno-threadsafe-statics \
+  -mno-red-zone -nostdlib -Wl,--subsystem,10 -Wl,-e,efi_main \
   -o BOOTX64.EFI boot/main.cpp boot/efi.cpp
 ```
 
 - `--subsystem,10` marca el PE32+ como *EFI application*.
 - `-nostdlib` evita depender de `msvcrt`; se implementan `memcpy`, `memset` y
   comparaciones mínimas en `boot/efi.cpp`.
-- CMake genera `build/generated/EmbeddedBootImage.cpp` con el arreglo
-  `kBootEfiImage` y `kBootEfiSha256`; el preparador lo enlaza en
-  `booteable_core`.
-- El target `bootx64.efi` es verificable por separado (`file`, `objdump -p`).
+- `tools/build-efi.sh` es la única fuente de estos flags; CMake lo invoca.
+- `tools/embed-efi.py` genera `build/generated/EmbeddedBootImage.cpp` con el
+  arreglo `kBootEfi`, su tamaño, el SHA-256 y un *build id* corto; el preparador
+  lo enlaza en `booteable_core`.
+- El target `bootx64_efi` es verificable por separado (`file`, `objdump -p`).
 - La ruta de arranque no se personaliza desde la TUI: cambiar el mensaje implica
   recompilar. Así se evita inyectar datos en un binario de arranque.
 
@@ -229,8 +230,9 @@ struct SafetyReport {
 
 struct BootImageSpec {
     std::uint64_t disk_bytes = 0;      // tamaño exacto del destino
-    std::uint64_t esp_bytes = 64ull * 1024 * 1024;
+    std::uint64_t esp_bytes = 0;       // 0 = automático (64 MiB o 260 MiB)
     std::string volume_label = "BOOTEABLE";
+    std::uint32_t logical_sector = 512; // 512 o 4096
 };
 
 struct ImageLayout {
@@ -269,7 +271,7 @@ struct ImageManifest {
 struct PrepConfig {
     DeviceInfo device;
     std::string image_path;     // vacío = archivo temporal disperso
-    std::uint64_t esp_bytes = 64ull * 1024 * 1024;  // configurable
+    std::uint64_t esp_bytes = 0;                    // 0 = automático
     std::string volume_label = "BOOTEABLE";         // configurable
     bool overwrite_confirmed = false;               // casilla + Enter
 };
@@ -299,8 +301,9 @@ struct PrepResult {
 Reglas de validación en `domain/Validation.*`:
 
 - `disk_bytes > 0` y múltiplo del sector lógico; `logical_sector` es 512 o 4096.
-- `esp_bytes` configurable: mínimo 48 MiB con 512 y 260 MiB con 4096; máximo
-  2 GiB. El valor por defecto se ajusta al mínimo si no se indica.
+- `esp_bytes` configurable: `0` significa automático (64 MiB con 512, 260 MiB
+  con 4096). Un valor explícito debe quedar entre el mínimo de 48/260 MiB y el
+  máximo de 2 GiB, y ser múltiplo del sector lógico.
 - `esp_first_lba + esp_sectors + entry_sectors + 1 <= disk_bytes / logical_sector`
   (ESP, GPT de respaldo y alineación).
 - `volume_label` configurable: 1–11 caracteres ASCII imprimibles, sin minúsculas
@@ -773,7 +776,7 @@ Secure Boot:     debe estar desactivado en el equipo de prueba
 
 ### 12.2 Reglas de UI
 
-- La UI solo incluye `app/IPrepController.hpp` y `domain/Types.hpp`.
+- La UI solo incluye `app/IPrepController.hpp` y `src/domain/Types.hpp`.
 - `MainScene` refresca con `F5` y al recibir el evento de cambio de dispositivo;
   no usa sondeo continuo en el panel de selección.
 - Durante la preparación, `ProgressScene` consulta `progress()` desde un
@@ -826,8 +829,8 @@ y objetivos de CTest, igual que los proyectos de referencia.
 Criterios transversales:
 
 - `ctest --output-on-failure` pasa sin red, sin root y sin USB real.
-- La prueba QEMU detecta la ausencia de `/usr/share/ovmf/OVMF.fd` y se salta con
-  un mensaje, no falla.
+- La prueba QEMU detecta la ausencia de OVMF (`OVMF_CODE_4M.fd`,
+  `OVMF_CODE.fd` o `OVMF_CODE`/`OVMF_VARS`) y se salta con un mensaje, no falla.
 - Ningún test deja archivos grandes en el repositorio; usan `build/` o
   `std::filesystem::temp_directory_path()`.
 - La imagen de prueba por defecto es de 64 MiB + overhead; el test de tamaño
@@ -933,17 +936,18 @@ src/
                   ResultScene · UiFormat
   cli/            main.cpp (build/verify/flash)
 tests/            TestHarness.hpp · fixtures/ · test_*.cpp
-tools/            build-efi.sh · run-qemu.sh · check-image.sh
+tools/            build-efi.sh · run-qemu.sh · embed-efi.py · check-image.sh
 docs/             Requerimientos · Arquitectura · Glosario · Plan · diagrama
-build/generated/  EmbeddedBootImage.cpp (generado por CMake)
+build/generated/  EmbeddedBootImage.cpp/.hpp (generado por CMake)
 ```
 
 Targets CMake:
 
 | Target | Enlaza | Notas |
 |---|---|---|
-| `bootx64.efi` | — | Cross-compilado con MinGW-w64, `-nostdlib` |
-| `booteable_core` | `bootx64.efi` (generado) | Sin Guayaba ni `ui/` |
+| `bootx64_efi` | — | Cross-compilado con MinGW-w64, `-nostdlib` |
+| `booteable_embedded` | `bootx64_efi` | Genera el arreglo y el SHA-256 |
+| `booteable_core` | `booteable_embedded` | Sin Guayaba ni `ui/` |
 | `booteable_ui` | `booteable_core` + Guayaba | Solo `app/` y `domain/` |
 | `booteable` | `booteable_ui` + `booteable_core` | TUI |
 | `booteable-image` | `booteable_core` | CLI headless |
