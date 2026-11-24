@@ -17,11 +17,21 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 
 ## Estado
 
-**WP0 implementado.** Ya existen los contratos de `src/domain/`, el esqueleto
-CMake, el programa EFI mínimo (`BOOTX64.EFI`) incrustado en el preparador, la
-prueba en QEMU/OVMF y una escena mínima de Guayaba. La construcción GPT/FAT32,
-la enumeración real de dispositivos y la CLI son los siguientes paquetes (WP2,
-WP3 y WP4); por ahora `booteable-image` solo muestra su ayuda.
+**WP0 y WP1 implementados.** Existen los contratos de `src/domain/`, el
+esqueleto CMake, la escena mínima de Guayaba y una aplicación EFI completa
+(`BOOTX64.EFI`):
+
+- mensaje fijo con la Universidad, la Facultad, el grupo y el hash de
+  compilación;
+- salida por consola y por `SerialIo`, sin fallar si el puerto serie no existe;
+- espera de tecla con límite de 10 segundos y apagado limpio con
+  `ResetSystem(EfiResetShutdown)`;
+- marcador `BOOTEABLE-BOOT-OK` para la prueba en QEMU/OVMF;
+- binario PE32+ x86_64, subsistema EFI y sin dependencias de la libc de Windows.
+
+La construcción GPT/FAT32, la enumeración real de dispositivos y la CLI son los
+siguientes paquetes (WP2, WP3 y WP4); por ahora `booteable-image` solo muestra su
+ayuda.
 
 La ruta elegida es **UEFI x86_64** con tabla **GPT** y una **ESP FAT32** que
 contiene `\EFI\BOOT\BOOTX64.EFI`. Es la ruta que el equipo de prueba admite y la
@@ -64,7 +74,7 @@ Targets:
 | `booteable_core` | Núcleo headless: dominio, contratos, fake y EFI incrustado |
 | `booteable_ui` | Escenas de la TUI sobre Guayaba |
 | `booteable` | Aplicación TUI |
-| `booteable-image` | CLI headless para construir, verificar y escribir una imagen |
+| `booteable-image` | CLI headless; `build`/`verify` llegan en WP2 |
 | `bootx64_efi` | Aplicación EFI que arranca el firmware |
 | `booteable_tests` | Suites headless registradas en CTest |
 
@@ -127,11 +137,17 @@ OVMF sin tocar hardware:
 
 El script detecta OVMF (`/usr/share/OVMF/OVMF_CODE_4M.fd`, `OVMF_CODE.fd` o las
 variables `OVMF_CODE`/`OVMF_VARS`), arma una ESP temporal con `fat:rw:` y busca
-el marcador `WP0-BOOT-OK` en la consola serie. Si faltan QEMU u OVMF, sale con
-código 77 para que CTest lo salte.
+el marcador `BOOTEABLE-BOOT-OK` en la consola serie. Después espera el apagado
+limpio del equipo: el programa se apaga solo a los 10 s o al pulsar una tecla.
+Si faltan QEMU u OVMF, sale con código 77 para que CTest lo salte.
 
-Cuando WP2 construya la imagen completa, se podrá pasar el archivo con
-`--efi`/`ESP_DIR`; el arranque final buscará `BOOTEABLE-BOOT-OK`.
+La prueba negativa usa OVMF con Secure Boot activo y exige que el binario sin
+firma **no** arranque:
+
+```bash
+./tools/run-qemu.sh --headless --secure-boot
+# QEMU/OVMF con Secure Boot: el binario sin firma fue bloqueado.
+```
 
 ## Pruebas
 
@@ -139,9 +155,14 @@ Cuando WP2 construya la imagen completa, se podrá pasar el archivo con
 ctest --test-dir build --output-on-failure
 ```
 
-Las pruebas son headless, no requieren red, root ni una USB real. La suite
-`unit` cubre validación y el controlador falso; `qemu_boot` arranca el EFI en
-OVMF y se salta si faltan QEMU u OVMF.
+Las pruebas son headless, no requieren red, root ni una USB real:
+
+- `unit`: validación y controlador falso.
+- `efi_binary`: cabecera PE32+, subsistema EFI, ausencia de imports de Windows y
+  presencia del marcador.
+- `qemu_boot`: arranque real en OVMF y apagado limpio.
+- `qemu_secure_boot`: prueba negativa con Secure Boot; se salta con código 77 si
+  faltan QEMU, OVMF o las imágenes de OVMF con Secure Boot.
 
 ## Diagrama
 
