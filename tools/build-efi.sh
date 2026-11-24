@@ -18,6 +18,12 @@ fi
 
 mkdir -p "$(dirname "$OUTPUT")"
 
+# Identificador corto de compilación: hash de las fuentes del programa de
+# arranque. Se muestra en pantalla y permite distinguir builds sin abrir el
+# binario. No depende de la fecha, así que dos builds iguales coinciden.
+BUILD_ID="$(cat "$ROOT/boot/efi.h" "$ROOT/boot/efi.cpp" "$ROOT/boot/main.cpp" \
+    | sha256sum | cut -c1-12)"
+
 "$CXX" \
     -std=c++17 \
     -O2 \
@@ -30,6 +36,7 @@ mkdir -p "$(dirname "$OUTPUT")"
     -fno-threadsafe-statics \
     -mno-red-zone \
     -nostdlib \
+    -DBOOTEABLE_BUILD_ID="\"$BUILD_ID\"" \
     -Wl,--subsystem,10 \
     -Wl,-e,efi_main \
     -Wl,--no-insert-timestamp \
