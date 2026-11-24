@@ -3,7 +3,7 @@
 #
 # La ESP de prueba se arma con el directorio build/esp y la opción `fat:rw:`
 # de QEMU; no se necesita mkfs.vfat, mtools ni root. En modo headless el
-# programa debe imprimir WP0-BOOT-OK por la consola serie.
+# programa debe imprimir BOOTEABLE-BOOT-OK por la consola serie.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,7 +14,7 @@ LOG="${SERIAL_LOG:-$BUILD/qemu-serial.log}"
 QEMU="${QEMU_BIN:-qemu-system-x86_64}"
 TIMEOUT_SECONDS="${QEMU_TIMEOUT:-30}"
 HEADLESS=0
-MARKER="${QEMU_MARKER:-WP0-BOOT-OK}"
+MARKER="${QEMU_MARKER:-BOOTEABLE-BOOT-OK}"
 
 usage() {
     cat <<'EOF'
@@ -153,7 +153,7 @@ if [[ "$HEADLESS" -eq 1 ]]; then
 
     if [[ "$FOUND" -eq 1 ]] || grep -q "$MARKER" "$LOG" 2>/dev/null; then
         echo "QEMU/OVMF: marcador '$MARKER' encontrado."
-        grep -a -E "booteable|WP0-BOOT-OK" "$LOG" | tail -n 5 || true
+        grep -a -E "booteable|BOOTEABLE-BOOT-OK" "$LOG" | tail -n 5 || true
         exit 0
     fi
 
