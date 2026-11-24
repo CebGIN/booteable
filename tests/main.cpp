@@ -6,6 +6,7 @@ void run_validation_tests();
 void run_fake_controller_tests();
 void run_core_tests();
 void run_layout_tests();
+void run_gpt_tests();
 
 namespace booteable::test {
 int failures = 0;
@@ -21,6 +22,7 @@ int main() {
     run_fake_controller_tests();
     run_core_tests();
     run_layout_tests();
+    run_gpt_tests();
 
     if (booteable::test::failures != 0) {
         std::cerr << booteable::test::failures << " comprobación(es) fallaron.\n";

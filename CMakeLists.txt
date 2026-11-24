@@ -105,6 +105,7 @@ add_library(booteable_core STATIC
     src/core/Crc32.cpp
     src/core/Sha256.cpp
     src/image/ImageLayout.cpp
+    src/image/GptWriter.cpp
     src/image/ImageFile.cpp
     src/app/FakePrepController.cpp
     "${EMBEDDED_CPP}")
@@ -141,7 +142,8 @@ add_executable(booteable_tests
     tests/test_validation.cpp
     tests/test_fake_controller.cpp
     tests/test_core.cpp
-    tests/test_layout.cpp)
+    tests/test_layout.cpp
+    tests/test_gpt.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core)
 booteable_warnings(booteable_tests)
