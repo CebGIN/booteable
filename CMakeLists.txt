@@ -142,6 +142,12 @@ booteable_warnings(booteable_tests)
 
 add_test(NAME unit COMMAND booteable_tests)
 
+# Cabecera PE32+, subsistema EFI y ausencia de dependencias de Windows.
+add_test(NAME efi_binary
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/check-efi.py"
+            "${EFI_BINARY}")
+
 # La prueba virtual se salta con código 77 si faltan QEMU u OVMF.
 add_test(NAME qemu_boot
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/run-qemu.sh" --headless)
