@@ -107,6 +107,7 @@ add_library(booteable_core STATIC
     src/image/ImageLayout.cpp
     src/image/GptWriter.cpp
     src/image/ImageFile.cpp
+    src/image/Fat32Writer.cpp
     src/app/FakePrepController.cpp
     "${EMBEDDED_CPP}")
 add_dependencies(booteable_core booteable_embedded)
