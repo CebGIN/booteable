@@ -13,7 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(WIN32)
     message(FATAL_ERROR
-        "El preparador de WP0 solo se compila en Linux: usa sysfs, ioctl de "
+        "El preparador solo se compila en Linux: usa sysfs, ioctl de "
         "bloque y umount2.")
 endif()
 
@@ -102,6 +102,8 @@ add_dependencies(bootx64_efi booteable_embedded)
 # Sin Guayaba ni UI: dominio, contratos, fake y el EFI incrustado.
 add_library(booteable_core STATIC
     src/domain/Validation.cpp
+    src/core/Crc32.cpp
+    src/core/Sha256.cpp
     src/app/FakePrepController.cpp
     "${EMBEDDED_CPP}")
 add_dependencies(booteable_core booteable_embedded)
@@ -135,7 +137,8 @@ enable_testing()
 add_executable(booteable_tests
     tests/main.cpp
     tests/test_validation.cpp
-    tests/test_fake_controller.cpp)
+    tests/test_fake_controller.cpp
+    tests/test_core.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core)
 booteable_warnings(booteable_tests)
