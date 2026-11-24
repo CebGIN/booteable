@@ -154,3 +154,11 @@ add_test(NAME qemu_boot
 set_tests_properties(qemu_boot PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 90)
+
+# Prueba negativa: con Secure Boot activo el PE sin firma no debe arrancar.
+add_test(NAME qemu_secure_boot
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/run-qemu.sh"
+            --headless --secure-boot)
+set_tests_properties(qemu_secure_boot PROPERTIES
+    SKIP_RETURN_CODE 77
+    TIMEOUT 90)
