@@ -33,7 +33,8 @@ std::vector<DeviceInfo> FakePrepController::default_devices() {
         "/dev/sdb", "/dev/disk/by-id/usb-Fake_USB_16GB_0001",
         "Fake USB 3.0", "FAKE0001", 16ull * 1024ull * 1024ull * 1024ull,
         DeviceTransport::Usb, true);
-    usb.partitions.push_back(DevicePartition{"sdb1", "/media/usb", 8ull * 1024ull * 1024ull * 1024ull});
+    usb.partitions.push_back(DevicePartition{
+        "sdb1", "/media/usb", 8ull * 1024ull * 1024ull * 1024ull, "8:17"});
 
     DeviceInfo small = make_device(
         "/dev/sdc", "/dev/disk/by-id/usb-Fake_USB_2GB_0002",
