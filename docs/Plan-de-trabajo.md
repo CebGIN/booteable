@@ -4,16 +4,16 @@
 
 | Rol | Frente | Archivos |
 |---|---|---|
-| **Lead / integración** | Contratos, `app/`, CLI, CMake, compilación EFI, QEMU, revisión y documentos | `domain/`, `app/`, `src/cli/`, `CMakeLists.txt`, `tools/`, `docs/` |
+| **Lead / integración** | Contratos, `app/`, CLI, CMake, compilación EFI, QEMU, revisión y documentos | `src/domain/`, `src/app/`, `src/cli/`, `CMakeLists.txt`, `tools/`, `docs/` |
 | **Arranque** | Programa EFI, mensaje, consola/serie, apagado y prueba en firmware | `boot/` |
-| **Imagen** | Geometría, GPT, FAT32, ensamblado y verificador de imagen | `image/`, `core/` |
-| **Dispositivos** | Enumeración sysfs, política de seguridad, montajes, escritura y relectura | `device/` |
-| **UI** | Escenas, diálogo de confirmación, progreso, resultado y formato | `ui/` |
+| **Imagen** | Geometría, GPT, FAT32, ensamblado y verificador de imagen | `src/image/`, `src/core/` |
+| **Dispositivos** | Enumeración sysfs, política de seguridad, montajes, escritura y relectura | `src/device/` |
+| **UI** | Escenas, diálogo de confirmación, progreso, resultado y formato | `src/ui/` |
 
 Reglas:
 
-- El **Lead** es el único que cambia los contratos de `domain/` y las interfaces
-  de `app/`. Se anuncian en el chat y se integran **primero** en `main`.
+- El **Lead** es el único que cambia los contratos de `src/domain/` y las
+  interfaces de `src/app/`. Se anuncian en el chat y se integran **primero** en `main`.
 - Cada tarea tiene dueño y un revisor distinto. Nadie mergea su propio cambio.
 - El Lead revisa contratos y `app/`; Arranque revisa Imagen; Imagen revisa
   Dispositivos; Dispositivos revisa UI; UI revisa Arranque.
@@ -38,7 +38,7 @@ equipo y del profesor:
 4. Ajustar el orden de integración según la disponibilidad de hardware.
 5. Registrar los cambios en este documento.
 
-Al cerrar WP0 se congelan `domain/` y las interfaces de `app/`. Cualquier cambio
+Al cerrar WP0 se congelan `src/domain/` y las interfaces de `src/app/`. Cualquier cambio
 posterior lo integra el Lead primero y se justifica.
 
 No hay fechas ni plazos en este plan: solo tareas, dependencias y criterios de
@@ -56,35 +56,40 @@ Entregables:
 
 - `CMakeLists.txt` con los targets de `Arquitectura.md` §18, detección de
   MinGW-w64 y mensaje claro si falta.
-- `domain/Types.hpp` y `domain/Validation.*` con los tipos y reglas de §5.
+- `src/domain/Types.hpp` y `src/domain/Validation.*` con los tipos y reglas de §5.
 - Interfaces `IBlockDeviceSource`, `IDeviceWriter`, `IImageVerifier`,
   `IPrepController` y `FakePrepController`.
-- `tests/TestHarness.hpp` con `CHECK`/`CHECK_EQ` y un test trivial.
-- `boot/efi.h` mínimo y `boot/main.cpp` que imprime un "hola" y devuelve
-  `EFI_SUCCESS` como stub.
-- `tools/build-efi.sh`, `tools/run-qemu.sh` y `bootx64.efi` compilando y
+- `tests/TestHarness.hpp` con `CHECK`/`CHECK_EQ` y pruebas de validación y del
+  controlador falso.
+- `boot/efi.h` mínimo y `boot/main.cpp` que imprime un "hola", el marcador
+  `WP0-BOOT-OK` y devuelve `EFI_SUCCESS` como stub.
+- `tools/build-efi.sh`, `tools/run-qemu.sh` y `bootx64_efi` compilando y
   arrancando en QEMU/OVMF.
-- Generación de `build/generated/EmbeddedBootImage.cpp` y su SHA-256 en CMake, a
-  partir del EFI de WP0. Así WP2 puede construir imágenes antes de que exista la
-  versión final de WP1.
+- `tools/embed-efi.py` y la generación de
+  `build/generated/EmbeddedBootImage.cpp` con su SHA-256, a partir del EFI de
+  WP0. Así WP2 puede construir imágenes antes de que exista la versión final de
+  WP1.
 - Submódulo `external/GuayabaTUIEngine` fijado en `v1.3.0-alpha` y una escena
   mínima que abra y cierre.
 
 Orden recomendado:
 
-1. CMake + `domain/` + contratos + fake + test trivial.
+1. CMake + `src/domain/` + contratos + fake + pruebas.
 2. `boot/efi.h`, `boot/main.cpp` "hola" y `tools/build-efi.sh`.
 3. `tools/run-qemu.sh` y smoke test en QEMU/OVMF.
-4. Generación del EFI incrustado y SHA-256.
+4. Generación del EFI incrustado con `tools/embed-efi.py`.
 5. Submódulo Guayaba y escena mínima.
 
 Criterio de salida:
 
 - `cmake -S . -B build && cmake --build build` compila todos los targets.
-- `ctest --test-dir build` pasa el test trivial.
-- `bootx64.efi` arranca en QEMU/OVMF y muestra el "hola" en serie.
-- `./build/booteable` abre una pantalla vacía y sale con `F10`.
-- `domain/` e interfaces quedaron revisados y congelados.
+- `ctest --test-dir build` pasa `unit` y `qemu_boot` (o lo salta si faltan QEMU u
+  OVMF).
+- `bootx64_efi` arranca en QEMU/OVMF y muestra `WP0-BOOT-OK` en serie.
+- `./build/booteable` abre una pantalla mínima con dispositivos simulados y sale
+  con `F10`.
+- `src/domain/`, los contratos y las interfaces quedaron revisados y
+  congelados.
 
 ### WP1 · Programa de arranque
 
@@ -114,18 +119,18 @@ Criterios de aceptación:
 
 **Depende de:** WP0. Puede avanzar en paralelo con WP1 usando el EFI "hola" de
 WP0; al terminar WP1 se reconstruye la imagen con el EFI final.
-**Consume:** `domain/`, `core/Crc32`, `core/Sha256`, `EmbeddedBootImage`.
+**Consume:** `src/domain/`, `src/core/Crc32`, `src/core/Sha256`, `EmbeddedBootImage`.
 **Entrega:** `ImageLayout`, `GptWriter`, `Fat32Writer`, `BootImageBuilder`,
 `ImageVerifier`.
 
 | Paso | Tarea | Archivos |
 |---|---|---|
-| 1 | CRC32 y SHA-256 con vectores de prueba | `core/Crc32.*`, `core/Sha256.*` |
-| 2 | Geometría: sector 512/4096, ESP, entry_sectors, límites y tamaño/label | `image/ImageLayout.*` |
-| 3 | MBR protector y GPT primaria/respaldo | `image/GptWriter.*` |
-| 4 | BPB, FSInfo, FAT doble y cadenas | `image/Fat32Writer.*` |
-| 5 | Ensamblado de la imagen con el EFI incrustado | `image/BootImageBuilder.*` |
-| 6 | Verificador de estructura, regiones y contenido | `image/ImageVerifier.*` |
+| 1 | CRC32 y SHA-256 con vectores de prueba | `src/core/Crc32.*`, `src/core/Sha256.*` |
+| 2 | Geometría: sector 512/4096, ESP, entry_sectors, límites y tamaño/label | `src/image/ImageLayout.*` |
+| 3 | MBR protector y GPT primaria/respaldo | `src/image/GptWriter.*` |
+| 4 | BPB, FSInfo, FAT doble y cadenas | `src/image/Fat32Writer.*` |
+| 5 | Ensamblado de la imagen con el EFI incrustado | `src/image/BootImageBuilder.*` |
+| 6 | Verificador de estructura, regiones y contenido | `src/image/ImageVerifier.*` |
 | 7 | CLI `build` y `verify` (con el Lead) | `src/cli/main.cpp` |
 
 Criterios de aceptación:
@@ -151,10 +156,10 @@ Criterios de aceptación:
 
 | Paso | Tarea | Archivos |
 |---|---|---|
-| 1 | `SysfsBlockDeviceSource`: `/sys/block`, modelo, serie, tamaño, transporte | `device/SysfsBlockDeviceSource.*` |
-| 2 | `by_id` y montajes desde `/proc/self/mountinfo` | `device/DeviceIdentity.*` |
-| 3 | `SystemContext` (raíz, `/boot`, `major:minor`) | `device/SystemContext.*` |
-| 4 | `SafetyPolicy` pura + fixtures (512, 4096, sector raro) | `device/SafetyPolicy.*` |
+| 1 | `SysfsBlockDeviceSource`: `/sys/block`, modelo, serie, tamaño, transporte | `src/device/SysfsBlockDeviceSource.*` |
+| 2 | `by_id` y montajes desde `/proc/self/mountinfo` | `src/device/DeviceIdentity.*` |
+| 3 | `SystemContext` (raíz, `/boot`, `major:minor`) | `src/device/SystemContext.*` |
+| 4 | `SafetyPolicy` pura + fixtures (512, 4096, sector raro) | `src/device/SafetyPolicy.*` |
 
 Criterios de aceptación:
 
@@ -172,9 +177,9 @@ Criterios de aceptación:
 
 | Paso | Tarea | Archivos |
 |---|---|---|
-| 1 | `MountManager` con `umount2(MNT_DETACH)` y relectura de montajes | `device/MountManager.*` |
-| 2 | `PosixDeviceWriter` (`open`, `ioctl`, `write`, `fsync`, relectura) | `device/PosixDeviceWriter.*` |
-| 3 | Fakes para archivo regular y errores inyectados | `device/Fake*` |
+| 1 | `MountManager` con `umount2(MNT_DETACH)` y relectura de montajes | `src/device/MountManager.*` |
+| 2 | `PosixDeviceWriter` (`open`, `ioctl`, `write`, `fsync`, relectura) | `src/device/PosixDeviceWriter.*` |
+| 3 | Fakes para archivo regular y errores inyectados | `src/device/Fake*` |
 | 4 | CLI `flash` con validación de sector/tamaño y confirmación (con el Lead) | `src/cli/main.cpp` |
 
 Orden obligatorio del flujo: **validar identidad → desmontar → abrir → escribir
@@ -199,17 +204,17 @@ Criterios de aceptación:
 
 | Paso | Tarea | Archivos |
 |---|---|---|
-| 1 | `MainScene` con lista y detalles | `ui/MainScene.*` |
-| 2 | `ConfirmDialog` con casilla de advertencia + `Enter` | `ui/ConfirmDialog.*` |
-| 3 | `ProgressScene` con etapas, barra y cancelar | `ui/ProgressScene.*` |
-| 4 | `ResultScene` y comandos de prueba | `ui/ResultScene.*` |
-| 5 | Formato de tamaños, hashes y estados | `ui/UiFormat.*` |
+| 1 | `MainScene` con lista y detalles | `src/ui/MainScene.*` |
+| 2 | `ConfirmDialog` con casilla de advertencia + `Enter` | `src/ui/ConfirmDialog.*` |
+| 3 | `ProgressScene` con etapas, barra y cancelar | `src/ui/ProgressScene.*` |
+| 4 | `ResultScene` y comandos de prueba | `src/ui/ResultScene.*` |
+| 5 | Formato de tamaños, hashes y estados | `src/ui/UiFormat.*` |
 
 Criterios de aceptación:
 
 - A 80×24 no se solapan paneles ni se cortan botones; a 120×40 se usa el layout
   de dos columnas.
-- La UI no incluye `device/`, `image/` ni `core/`; todo pasa por
+- La UI no incluye `src/device/`, `src/image/` ni `src/core/`; todo pasa por
   `IPrepController`.
 - Con el fake se recorren selección, confirmación, progreso, cancelación y
   resultado.
@@ -223,9 +228,9 @@ Criterios de aceptación:
 
 | Paso | Tarea | Archivos |
 |---|---|---|
-| 1 | `PrepController` con estado, hilo y cancelación | `app/PrepController.*` |
-| 2 | `PrepRunner`: construir → desmontar → abrir → escribir → sync → verificar | `app/PrepRunner.*` |
-| 3 | Integrar controlador real en las escenas | `ui/*`, `app/*` |
+| 1 | `PrepController` con estado, hilo y cancelación | `src/app/PrepController.*` |
+| 2 | `PrepRunner`: construir → desmontar → abrir → escribir → sync → verificar | `src/app/PrepRunner.*` |
+| 3 | Integrar controlador real en las escenas | `src/ui/*`, `src/app/*` |
 
 Criterios de aceptación:
 
