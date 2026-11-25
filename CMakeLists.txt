@@ -110,6 +110,10 @@ add_library(booteable_core STATIC
     src/image/Fat32Writer.cpp
     src/image/BootImageBuilder.cpp
     src/image/ImageVerifier.cpp
+    src/device/DeviceIdentity.cpp
+    src/device/SystemContext.cpp
+    src/device/SysfsBlockDeviceSource.cpp
+    src/device/SafetyPolicy.cpp
     src/app/FakePrepController.cpp
     "${EMBEDDED_CPP}")
 add_dependencies(booteable_core booteable_embedded)
@@ -149,7 +153,9 @@ add_executable(booteable_tests
     tests/test_layout.cpp
     tests/test_gpt.cpp
     tests/test_fat32.cpp
-    tests/test_image_roundtrip.cpp)
+    tests/test_image_roundtrip.cpp
+    tests/test_safety_policy.cpp
+    tests/test_sysfs_source.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core)
 booteable_warnings(booteable_tests)
