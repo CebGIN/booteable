@@ -17,7 +17,7 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 
 ## Estado
 
-**WP0, WP1 y WP2 implementados.**
+**WP0, WP1, WP2, WP3a y WP3b implementados.**
 
 - **WP1** entrega la aplicación EFI completa: mensaje fijo, colores, salida por
   consola y puerto serie, espera de tecla con límite, apagado limpio con
@@ -26,10 +26,16 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
   primaria y de respaldo, ESP FAT32 con `EFI/BOOT/BOOTX64.EFI`, CRC32, SHA-256,
   verificación por regiones y CLI `build`/`verify` para sectores de 512 y 4096.
   La imagen es dispersa y determinista.
+- **WP3a** entrega la enumeración real desde sysfs (`/sys/block`, modelo, serie,
+  tamaño, transporte, `by-id`, particiones y montajes) y la política de seguridad
+  pura, probada con fixtures y sin hardware.
+- **WP3b** entrega el desmontaje controlado, el escritor POSIX, los fakes y el
+  comando `flash`, que valida identidad y geometría, desmonta, abre con `O_EXCL`,
+  escribe, sincroniza y relee el manifiesto por regiones.
 
-La enumeración real de dispositivos, la escritura en la USB y el flujo completo
-de la TUI son WP3a/WP3b/WP4a/WP4b/WP5; por eso `booteable-image flash` todavía no
-escribe dispositivos.
+El flujo completo de la TUI sobre datos reales es WP4b y la integración final es
+WP5. La TUI actual sigue siendo la escena mínima de WP0 con datos simulados; la
+CLI ya puede escribir un dispositivo real con `booteable-image flash`.
 
 La ruta elegida es **UEFI x86_64** con tabla **GPT** y una **ESP FAT32** que
 contiene `\EFI\BOOT\BOOTX64.EFI`. Es la ruta que el equipo de prueba admite y la
@@ -107,7 +113,7 @@ puntos de montaje y la etiqueta/tamaño elegidos, y exigir la casilla de
 advertencia más `Enter` antes de escribir. Sin privilegios se podrá explorar y
 exportar una imagen, pero no escribir un dispositivo.
 
-La CLI de WP2 construye y verifica imágenes sin tocar hardware:
+La CLI headless construye y verifica imágenes sin tocar hardware:
 
 ```bash
 # Construir una imagen de 64 MiB con el EFI final incrustado
@@ -128,8 +134,29 @@ La CLI de WP2 construye y verifica imágenes sin tocar hardware:
 `--size-mb` es el tamaño exacto del archivo. En una imagen de 64 MiB la ESP
 automática de 64 MiB no entra junto a la GPT, así que se reduce al mayor tamaño
 posible (unos 63 MiB, por encima del mínimo FAT32). Si se pide `--esp-mib`
-explícito y no entra, el build falla. `flash` llega en WP3b; hasta entonces la
-CLI no escribe dispositivos.
+explícito y no entra, el build falla.
+
+Con la imagen verificada se puede preparar un destino. En una USB real hay que
+ejecutar con `sudo`; sin `--yes` la CLI pide confirmación explícita antes de
+abrir el dispositivo. Un archivo regular del tamaño exacto sirve como destino de
+prueba y no requiere privilegios:
+
+```bash
+# Destino real (se requiere root y confirmación)
+sudo ./build/booteable-image flash --device /dev/sdb \
+  --image build/booteable.img
+
+# Destino de prueba sin tocar hardware
+truncate -s $((64 * 1024 * 1024)) build/usb.img
+./build/booteable-image flash --device build/usb.img \
+  --image build/booteable.img --yes
+```
+
+`flash` rechaza una imagen cuyo sector lógico o tamaño no coincide con el
+destino, rechaza discos del sistema y dispositivos sin identidad estable, y
+desmonta solo las particiones del destino antes de escribir. El resultado
+informa la etapa, los bytes escritos y los hashes releídos; solo imprime
+`VERIFICADO` cuando la relectura reproduce todas las regiones del manifiesto.
 
 ## Prueba virtual
 
@@ -164,11 +191,16 @@ ctest --test-dir build --output-on-failure
 Las pruebas son headless, no requieren red, root ni una USB real:
 
 - `unit`: dominio, controlador falso, CRC32/SHA-256, geometría, GPT, FAT32,
-  roundtrip de imagen y corrupción de cada región.
+  roundtrip de imagen y corrupción de cada región, enumeración sysfs con
+  fixtures, política de seguridad, montajes, escritor de archivos y flujo de
+  escritura (incluidas desconexión y cancelación).
 - `efi_binary`: cabecera PE32+, subsistema EFI, ausencia de imports de Windows y
   presencia del marcador.
 - `image_cli`: `build`/`verify` en 512 y 4096, tamaño exacto, etiqueta, detección
   de corrupción y control cruzado opcional con `fsck.vfat`.
+- `flash_cli`: `flash` sobre un archivo regular del tamaño exacto, rechazo de
+  tamaños distintos y de imágenes corruptas, y ninguna escritura sin
+  confirmación. No requiere root ni USB.
 - `qemu_boot` y `qemu_boot_image`: arranque real en OVMF, desde la carpeta y
   desde la imagen construida. Se saltan con código 77 si faltan QEMU u OVMF.
 - `qemu_boot_4kn`: la misma imagen con sector lógico de 4096 y ESP de 260 MiB,
@@ -212,11 +244,12 @@ src/
   domain/     Tipos, enums y validación pura (congelado en WP0)
   core/       SHA-256, CRC32 y utilidades de bytes
   image/      ImageLayout, GPT, FAT32, ensamblado y verificador de imagen
-  device/     Enumeración sysfs, política, escritor y montajes (WP3)
-  app/        Controlador, runner, estado y mocks (WP4b)
+  device/     Enumeración sysfs, política, montajes, escritor y flujo de flash
+  app/        Controlador falso; controlador real y runner en WP4b
   ui/         Escenas, confirmación y progreso (WP4a)
-  cli/        build y verify; flash llega en WP3b
-tools/        build-efi, embed-efi, run-qemu, check-efi, test-image-cli
+  cli/        build, verify y flash
+tools/        build-efi, embed-efi, run-qemu, check-efi, test-image-cli,
+              test-cli-flash
 tests/        Pruebas headless con CTest
 docs/         Requerimientos, arquitectura, glosario, plan y diagrama
 ```
@@ -229,10 +262,10 @@ docs/         Requerimientos, arquitectura, glosario, plan y diagrama
   después de cerrar; si cambió, falla sin declarar éxito.
 - Exige marcar una casilla y pulsar `Enter`, y advierte que se perderá todo el
   contenido. Desmonta las particiones montadas antes de escribir.
-- WP2 construye la imagen, hace `fsync`, la relee y compara sus regiones antes de
-  informar éxito. WP3b hará lo mismo sobre el dispositivo: escribir, sincronizar,
-  releer y comparar SHA-256. Una operación cancelada o interrumpida quedará
-  marcada como **incompleta**.
+- WP2 construye la imagen y WP3b la escribe sobre el dispositivo: `fsync`,
+  `BLKFLSBUF`, relectura de las regiones del manifiesto y comparación de
+  SHA-256. Una operación cancelada o interrumpida queda marcada como
+  **incompleta** y nunca se informa como verificada.
 - El programa de arranque no escribe en discos: solo usa consola/serie, espera
   una tecla con límite y se apaga con `ResetSystem`.
 - Secure Boot bloquea binarios sin firma. La herramienta **no** desactiva ni
