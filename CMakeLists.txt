@@ -133,8 +133,9 @@ booteable_warnings(booteable)
 
 # --- CLI headless ----------------------------------------------------------------
 add_executable(booteable-image src/cli/main.cpp)
+target_link_libraries(booteable-image PRIVATE booteable_core)
 target_compile_definitions(booteable-image PRIVATE
-    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp0")
+    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp2")
 booteable_warnings(booteable-image)
 
 # --- Pruebas ---------------------------------------------------------------------
@@ -175,3 +176,9 @@ add_test(NAME qemu_secure_boot
 set_tests_properties(qemu_secure_boot PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 90)
+
+# Prueba funcional de la CLI con imágenes de 512 y 4096.
+add_test(NAME image_cli
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-image-cli.sh"
+            "$<TARGET_FILE:booteable-image>")
+set_tests_properties(image_cli PROPERTIES TIMEOUT 180)
