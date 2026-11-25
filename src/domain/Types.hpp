@@ -63,6 +63,7 @@ struct DevicePartition {
     std::string name;          // sdb1
     std::string mount_point;   // vacío si no está montada
     std::uint64_t size_bytes = 0;
+    std::string dev_id;        // major:minor de sysfs, para mountinfo
 };
 
 struct DeviceInfo {
@@ -76,6 +77,8 @@ struct DeviceInfo {
     DeviceTransport transport = DeviceTransport::Unknown;
     bool read_only = false;
     std::vector<DevicePartition> partitions;
+    std::string dev_id;                 // major:minor del disco
+    std::vector<std::string> holders;   // dm/md/LVM que retienen el disco
 };
 
 struct SystemContext {

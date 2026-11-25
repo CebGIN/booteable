@@ -13,7 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(WIN32)
     message(FATAL_ERROR
-        "El preparador de WP0 solo se compila en Linux: usa sysfs, ioctl de "
+        "El preparador solo se compila en Linux: usa sysfs, ioctl de "
         "bloque y umount2.")
 endif()
 
@@ -99,9 +99,26 @@ add_custom_target(bootx64_efi ALL)
 add_dependencies(bootx64_efi booteable_embedded)
 
 # --- Núcleo headless -------------------------------------------------------------
-# Sin Guayaba ni UI: dominio, contratos, fake y el EFI incrustado.
+# Sin Guayaba ni UI: dominio, core, imagen, fake y el EFI incrustado.
 add_library(booteable_core STATIC
     src/domain/Validation.cpp
+    src/core/Crc32.cpp
+    src/core/Sha256.cpp
+    src/image/ImageLayout.cpp
+    src/image/GptWriter.cpp
+    src/image/ImageFile.cpp
+    src/image/Fat32Writer.cpp
+    src/image/BootImageBuilder.cpp
+    src/image/ImageVerifier.cpp
+    src/device/DeviceIdentity.cpp
+    src/device/SystemContext.cpp
+    src/device/SysfsBlockDeviceSource.cpp
+    src/device/SafetyPolicy.cpp
+    src/device/MountManager.cpp
+    src/device/PosixDeviceWriter.cpp
+    src/device/FileDeviceWriter.cpp
+    src/device/FaultyDeviceWriter.cpp
+    src/device/DeviceFlasher.cpp
     src/app/FakePrepController.cpp
     "${EMBEDDED_CPP}")
 add_dependencies(booteable_core booteable_embedded)
@@ -125,8 +142,9 @@ booteable_warnings(booteable)
 
 # --- CLI headless ----------------------------------------------------------------
 add_executable(booteable-image src/cli/main.cpp)
+target_link_libraries(booteable-image PRIVATE booteable_core)
 target_compile_definitions(booteable-image PRIVATE
-    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp0")
+    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp3")
 booteable_warnings(booteable-image)
 
 # --- Pruebas ---------------------------------------------------------------------
@@ -135,12 +153,28 @@ enable_testing()
 add_executable(booteable_tests
     tests/main.cpp
     tests/test_validation.cpp
-    tests/test_fake_controller.cpp)
+    tests/test_fake_controller.cpp
+    tests/test_core.cpp
+    tests/test_layout.cpp
+    tests/test_gpt.cpp
+    tests/test_fat32.cpp
+    tests/test_image_roundtrip.cpp
+    tests/test_safety_policy.cpp
+    tests/test_sysfs_source.cpp
+    tests/test_mount_manager.cpp
+    tests/test_device_writer.cpp
+    tests/test_flash.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core)
 booteable_warnings(booteable_tests)
 
 add_test(NAME unit COMMAND booteable_tests)
+
+# Cabecera PE32+, subsistema EFI y ausencia de dependencias de Windows.
+add_test(NAME efi_binary
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/check-efi.py"
+            "${EFI_BINARY}")
 
 # La prueba virtual se salta con código 77 si faltan QEMU u OVMF.
 add_test(NAME qemu_boot
@@ -148,3 +182,40 @@ add_test(NAME qemu_boot
 set_tests_properties(qemu_boot PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 90)
+
+# Prueba negativa: con Secure Boot activo el PE sin firma no debe arrancar.
+add_test(NAME qemu_secure_boot
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/run-qemu.sh"
+            --headless --secure-boot)
+set_tests_properties(qemu_secure_boot PROPERTIES
+    SKIP_RETURN_CODE 77
+    TIMEOUT 90)
+
+# Prueba funcional de la CLI con imágenes de 512 y 4096.
+add_test(NAME image_cli
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-image-cli.sh"
+            "$<TARGET_FILE:booteable-image>")
+set_tests_properties(image_cli PROPERTIES TIMEOUT 180)
+
+# Prueba funcional de flash sobre un archivo regular, sin root ni hardware.
+add_test(NAME flash_cli
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-cli-flash.sh"
+            "$<TARGET_FILE:booteable-image>")
+set_tests_properties(flash_cli PROPERTIES TIMEOUT 240)
+
+# Arranque real desde la imagen GPT/FAT32 construida por el preparador.
+add_test(NAME qemu_boot_image
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-qemu-image.sh"
+            "$<TARGET_FILE:booteable-image>")
+set_tests_properties(qemu_boot_image PROPERTIES
+    SKIP_RETURN_CODE 77
+    TIMEOUT 120)
+
+# La misma prueba con sector lógico de 4096 y ESP de 260 MiB.
+add_test(NAME qemu_boot_4kn
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-qemu-image.sh"
+            "$<TARGET_FILE:booteable-image>"
+            "${CMAKE_BINARY_DIR}/qemu-image-4kn.img" 4096)
+set_tests_properties(qemu_boot_4kn PROPERTIES
+    SKIP_RETURN_CODE 77
+    TIMEOUT 150)

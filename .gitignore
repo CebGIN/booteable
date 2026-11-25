@@ -25,9 +25,6 @@ compile_commands.json
 *.log
 resultados/
 
-# Instrucciones internas del agente (no trackear)
-AGENTS.md
-
 # Python
 __pycache__/
 *.pyc
