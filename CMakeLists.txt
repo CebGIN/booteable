@@ -99,7 +99,7 @@ add_custom_target(bootx64_efi ALL)
 add_dependencies(bootx64_efi booteable_embedded)
 
 # --- Núcleo headless -------------------------------------------------------------
-# Sin Guayaba ni UI: dominio, contratos, fake y el EFI incrustado.
+# Sin Guayaba ni UI: dominio, core, imagen, fake y el EFI incrustado.
 add_library(booteable_core STATIC
     src/domain/Validation.cpp
     src/core/Crc32.cpp
@@ -108,6 +108,8 @@ add_library(booteable_core STATIC
     src/image/GptWriter.cpp
     src/image/ImageFile.cpp
     src/image/Fat32Writer.cpp
+    src/image/BootImageBuilder.cpp
+    src/image/ImageVerifier.cpp
     src/app/FakePrepController.cpp
     "${EMBEDDED_CPP}")
 add_dependencies(booteable_core booteable_embedded)
@@ -144,7 +146,9 @@ add_executable(booteable_tests
     tests/test_fake_controller.cpp
     tests/test_core.cpp
     tests/test_layout.cpp
-    tests/test_gpt.cpp)
+    tests/test_gpt.cpp
+    tests/test_fat32.cpp
+    tests/test_image_roundtrip.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core)
 booteable_warnings(booteable_tests)
