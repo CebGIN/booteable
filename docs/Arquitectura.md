@@ -106,7 +106,8 @@ La aplicación:
 2. Limpia la consola y fija colores con `ConOut->SetAttribute`.
 3. Imprime el mensaje del grupo y el identificador de compilación.
 4. Escribe el mismo texto en el puerto serie si `SerialIo` está disponible.
-5. Espera una tecla con `ConIn->WaitForKey` y `ConIn->ReadKeyStroke`.
+5. Espera una tecla con `ConIn->ReadKeyStroke`, sondeando con `BS->Stall`
+   durante 10 segundos; si no hay tecla, apaga igual.
 6. Apaga el equipo con `ST->RuntimeServices->ResetSystem(EfiResetShutdown, ...)`.
 
 Apagar es el comportamiento provisional mientras el resto del proyecto no esté
@@ -399,6 +400,12 @@ mayor capacidad que la imagen de prueba, la TUI construye la imagen con
 `disk_bytes` igual a la capacidad real, de modo que la GPT de respaldo quede en
 el último LBA físico. Para QEMU/CLI se usa `--size-mb` y ese es el tamaño del
 archivo.
+
+Cuando `esp_bytes = 0` y el valor por defecto no entra en un disco pequeño
+(por ejemplo, una imagen de 64 MiB con ESP automática de 64 MiB), el tamaño se
+reduce al mayor que quepa antes de la GPT de respaldo, siempre por encima del
+mínimo FAT32. Si el usuario pide `--esp-mib` explícito y no entra, el build
+falla: no se recorta una elección explícita.
 
 El archivo se crea con `ftruncate(disk_bytes)` y solo se escriben las regiones
 con contenido (MBR, GPT primaria, ESP y GPT de respaldo). En un sistema de

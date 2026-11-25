@@ -2,6 +2,7 @@
 #define BOOTEABLE_DEVICE_IDEVICEWRITER_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include "domain/Types.hpp"
@@ -21,6 +22,26 @@ public:
     virtual bool read_back(std::byte* data, std::size_t bytes,
                            std::string& error) = 0;
     virtual void close() = 0;
+
+    // Extensión compatible de WP3b: lectura en un offset exacto para comparar
+    // las regiones del manifiesto sin recorrer la capacidad libre del medio.
+    virtual bool read_at(std::uint64_t offset, std::byte* data,
+                         std::size_t bytes, std::string& error) {
+        (void)offset;
+        (void)data;
+        (void)bytes;
+        error = "El escritor no soporta lectura por offset.";
+        return false;
+    }
+
+    // Último errno del sistema, para traducirlo a PrepOutcome. 0 si no aplica.
+    virtual int last_errno() const { return 0; }
+
+    // Capacidad y sector reales del destino abierto. 0 si el escritor no los
+    // conoce (por ejemplo, un fake en memoria).
+    virtual std::uint64_t size() const { return 0; }
+    virtual std::uint32_t sector_size() const { return 0; }
+    virtual std::uint64_t bytes_written() const { return 0; }
 };
 
 } // namespace booteable
