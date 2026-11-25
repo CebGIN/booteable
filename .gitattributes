@@ -1,0 +1,2 @@
+# Los scripts se ejecutan con bash en Linux/WSL: CRLF rompe `set -euo pipefail`.
+*.sh text eol=lf
