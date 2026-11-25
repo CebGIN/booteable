@@ -1,15 +1,25 @@
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 #include "EmbeddedBootImage.hpp"
+#include "device/DeviceFlasher.hpp"
+#include "device/MountManager.hpp"
+#include "device/PosixDeviceWriter.hpp"
+#include "device/SafetyPolicy.hpp"
+#include "device/SysfsBlockDeviceSource.hpp"
 #include "domain/Types.hpp"
 #include "image/BootImageBuilder.hpp"
 #include "image/ImageVerifier.hpp"
 
 #ifndef BOOTEABLE_VERSION
-#define BOOTEABLE_VERSION "0.2.0-wp2"
+#define BOOTEABLE_VERSION "0.3.0-wp3"
 #endif
 
 namespace {
@@ -34,7 +44,9 @@ void print_usage() {
         "        relee la imagen para verificar. El archivo es disperso y tiene\n"
         "        exactamente el tamaño pedido.\n"
         "verify: relee estructura, CRC, FAT, árbol EFI/BOOT y SHA-256 del binario.\n"
-        "flash:  llega en WP3b; por ahora no escribe dispositivos.\n";
+        "flash:  valida el destino, desmonta, escribe, sincroniza y relee. Sin\n"
+        "        --yes pide confirmación explícita. Un archivo regular se acepta\n"
+        "        como destino de prueba, nunca un disco del sistema.\n";
 }
 
 bool parse_u64(const std::string& text, std::uint64_t& out) {
@@ -200,6 +212,271 @@ int command_verify(const std::vector<std::string>& args) {
     return 0;
 }
 
+std::string outcome_name(booteable::PrepOutcome outcome) {
+    using booteable::PrepOutcome;
+    switch (outcome) {
+    case PrepOutcome::Verified:
+        return "VERIFICADO";
+    case PrepOutcome::VerificationFailed:
+        return "VERIFICACIÓN FALLIDA";
+    case PrepOutcome::Cancelled:
+        return "CANCELADO";
+    case PrepOutcome::Incomplete:
+        return "INCOMPLETO";
+    case PrepOutcome::PermissionDenied:
+        return "SIN PERMISOS";
+    case PrepOutcome::InvalidTarget:
+        return "DESTINO INVÁLIDO";
+    case PrepOutcome::Disconnected:
+        return "DESCONECTADO";
+    case PrepOutcome::InsufficientSpace:
+        return "CAPACIDAD INSUFICIENTE";
+    case PrepOutcome::BuildError:
+        return "ERROR DE IMAGEN";
+    case PrepOutcome::DeviceError:
+        return "ERROR DE DISPOSITIVO";
+    case PrepOutcome::UnmountError:
+        return "ERROR AL DESMONTAR";
+    case PrepOutcome::None:
+    default:
+        return "SIN RESULTADO";
+    }
+}
+
+std::string stage_name(booteable::PrepStage stage) {
+    using booteable::PrepStage;
+    switch (stage) {
+    case PrepStage::Idle:
+        return "inactiva";
+    case PrepStage::Enumerating:
+        return "enumerando";
+    case PrepStage::Validating:
+        return "validando";
+    case PrepStage::Confirming:
+        return "confirmando";
+    case PrepStage::Building:
+        return "construyendo";
+    case PrepStage::Unmounting:
+        return "desmontando";
+    case PrepStage::Opening:
+        return "abriendo";
+    case PrepStage::Writing:
+        return "escribiendo";
+    case PrepStage::Syncing:
+        return "sincronizando";
+    case PrepStage::Verifying:
+        return "verificando";
+    case PrepStage::Done:
+        return "completada";
+    case PrepStage::Failed:
+        return "falló";
+    case PrepStage::Cancelled:
+        return "cancelada";
+    case PrepStage::Incomplete:
+        return "incompleta";
+    default:
+        return "desconocida";
+    }
+}
+
+void print_safety(const booteable::SafetyReport& report) {
+    for (const std::string& reason : report.reasons) {
+        std::cerr << "  Rechazo: " << reason << "\n";
+    }
+    for (const std::string& warning : report.warnings) {
+        std::cout << "  Advertencia: " << warning << "\n";
+    }
+}
+
+bool prompt_confirmation(const booteable::DeviceInfo& device,
+                         const booteable::ImageManifest& manifest) {
+    std::cout << "\nSe va a sobrescribir " << device.path << " ("
+              << device.size_bytes / kMib << " MiB).\n"
+              << "  Modelo: " << device.model << "\n"
+              << "  Serie: " << device.serial << "\n"
+              << "  Imagen: " << manifest.disk_bytes << " bytes · sha256 "
+              << manifest.manifest_sha256.substr(0, 16) << "…\n"
+              << "Se perderá todo el contenido anterior.\n"
+              << "¿Continuar? [s/N]: ";
+    std::cout.flush();
+
+    std::string answer;
+    if (!std::getline(std::cin, answer)) {
+        return false;
+    }
+    for (char& character : answer) {
+        if (character >= 'A' && character <= 'Z') {
+            character = static_cast<char>(character - 'A' + 'a');
+        }
+    }
+    return answer == "s" || answer == "si" || answer == "sí" || answer == "y" ||
+           answer == "yes";
+}
+
+bool resolve_target(const std::string& path, std::uint32_t image_sector,
+                    booteable::SysfsBlockDeviceSource& source,
+                    booteable::DeviceInfo& device, bool& regular_file,
+                    std::string& error) {
+    struct stat info {};
+    if (::stat(path.c_str(), &info) != 0) {
+        error = "No se pudo consultar " + path + ": " + std::strerror(errno);
+        return false;
+    }
+
+    if (S_ISBLK(info.st_mode)) {
+        const std::optional<booteable::DeviceInfo> found = source.refresh(path);
+        if (!found) {
+            error = path + " no aparece en /sys/block como dispositivo de bloque.";
+            return false;
+        }
+        device = *found;
+        regular_file = false;
+        return true;
+    }
+
+    if (S_ISREG(info.st_mode)) {
+        // Destino de prueba: un archivo regular del tamaño exacto de la imagen.
+        // No se aplica la política de USB porque no hay hardware que proteger.
+        device = booteable::DeviceInfo{};
+        device.path = path;
+        device.size_bytes = static_cast<std::uint64_t>(info.st_size);
+        device.logical_sector = image_sector;
+        device.removable = true;
+        device.transport = booteable::DeviceTransport::Virtual;
+        device.serial = "regular-file";
+        device.by_id = path;
+        regular_file = true;
+        return true;
+    }
+
+    error = path + " no es un dispositivo de bloque ni un archivo regular.";
+    return false;
+}
+
+int command_flash(const std::vector<std::string>& args) {
+    std::string device_path;
+    std::string image_path;
+    bool assume_yes = false;
+
+    for (std::size_t index = 0; index < args.size(); ++index) {
+        const std::string& option = args[index];
+        if (option == "--yes") {
+            assume_yes = true;
+        } else if (option == "--device") {
+            if (index + 1 >= args.size()) {
+                std::cerr << "Falta el valor de --device.\n";
+                return 2;
+            }
+            device_path = args[++index];
+        } else if (option == "--image") {
+            if (index + 1 >= args.size()) {
+                std::cerr << "Falta el valor de --image.\n";
+                return 2;
+            }
+            image_path = args[++index];
+        } else {
+            std::cerr << "Opción desconocida: " << option << "\n";
+            return 2;
+        }
+    }
+
+    if (device_path.empty() || image_path.empty()) {
+        std::cerr << "flash requiere --device RUTA y --image RUTA.\n";
+        return 2;
+    }
+
+    booteable::ImageManifest manifest;
+    std::string error;
+    const booteable::ImageVerifier verifier;
+    if (!verifier.verify(image_path, manifest, error)) {
+        std::cerr << "La imagen no verifica: " << error << "\n";
+        return 1;
+    }
+
+    std::uint32_t image_sector = 0;
+    if (!booteable::detect_image_sector_size(image_path, image_sector, error)) {
+        std::cerr << "No se pudo detectar el sector de la imagen: " << error
+                  << "\n";
+        return 1;
+    }
+
+    booteable::SysfsBlockDeviceSource source;
+    booteable::DeviceInfo device;
+    bool regular_file = false;
+    if (!resolve_target(device_path, image_sector, source, device,
+                        regular_file, error)) {
+        std::cerr << error << "\n";
+        return 1;
+    }
+
+    if (device.size_bytes != manifest.disk_bytes) {
+        std::cerr << "La imagen mide " << manifest.disk_bytes
+                  << " bytes y el destino " << device.size_bytes
+                  << " bytes; deben coincidir. Usá --size-mb al construir.\n";
+        return 1;
+    }
+    if (!regular_file && device.logical_sector != image_sector) {
+        std::cerr << "La imagen usa sectores de " << image_sector
+                  << " bytes y el destino de " << device.logical_sector
+                  << "; construí la imagen con --sector-size "
+                  << device.logical_sector << ".\n";
+        return 1;
+    }
+
+    if (regular_file) {
+        std::cout << "Destino de prueba: archivo regular " << device.path
+                  << " (" << device.size_bytes / kMib << " MiB).\n";
+    } else {
+        const booteable::SafetyPolicy policy;
+        const booteable::SafetyReport report = policy.evaluate_for_write(
+            device, source.system_context());
+        print_safety(report);
+        if (report.verdict == booteable::SafetyVerdict::Rejected) {
+            std::cerr << "El destino fue rechazado; no se escribió nada.\n";
+            return 1;
+        }
+        if (::geteuid() != 0) {
+            std::cerr << "Se requieren privilegios para escribir "
+                      << device.path << ". Ejecutá `sudo ./build/booteable-image"
+                      << " flash ...`.\n";
+            return 1;
+        }
+    }
+
+    if (!assume_yes && !prompt_confirmation(device, manifest)) {
+        std::cout << "Cancelado por el usuario; no se abrió el dispositivo.\n";
+        return 1;
+    }
+
+    booteable::PosixDeviceWriter writer;
+    booteable::MountManager mounts;
+    booteable::FlashCallbacks callbacks;
+    if (!regular_file) {
+        callbacks.refresh = [&source](const std::string& path) {
+            return source.refresh(path);
+        };
+    }
+    callbacks.progress = [](const booteable::PrepProgress& progress) {
+        std::cerr << "  [" << progress.percent << "%] " << progress.detail
+                  << "\n";
+    };
+
+    const booteable::PrepResult result = booteable::flash_image_to_device(
+        device, image_path, manifest, writer, mounts, callbacks);
+
+    std::cout << "\nResultado: " << outcome_name(result.outcome) << "\n"
+              << "  Etapa: " << stage_name(result.failed_stage) << "\n"
+              << "  Mensaje: " << result.message << "\n"
+              << "  Bytes escritos: " << result.bytes_written << "\n"
+              << "  Sincronizado: " << (result.synchronized ? "sí" : "no")
+              << "\n"
+              << "  Verificado: " << (result.verified ? "sí" : "no") << "\n"
+              << "  Imagen sha256: " << result.image_sha256 << "\n"
+              << "  Dispositivo sha256: " << result.device_sha256 << "\n";
+
+    return result.outcome == booteable::PrepOutcome::Verified ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -223,9 +500,7 @@ int main(int argc, char** argv) {
         return command_verify(rest);
     }
     if (args[0] == "flash") {
-        std::cerr << "El comando 'flash' llega en WP3b; todavía no escribe "
-                     "dispositivos.\n";
-        return 2;
+        return command_flash(rest);
     }
 
     std::cerr << "Comando desconocido: " << args[0] << "\n";

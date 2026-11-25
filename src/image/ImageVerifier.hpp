@@ -31,6 +31,13 @@ public:
 // imagen construida y la relectura del dispositivo.
 std::string canonical_manifest_hash(const ImageManifest& manifest);
 
+// Detecta el sector lógico de una imagen GPT leyendo la firma "EFI PART" en
+// 512 o en 4096. Se usa en `flash` para rechazar una imagen incompatible con
+// el sector del destino.
+bool detect_image_sector_size(const std::filesystem::path& image,
+                              std::uint32_t& sector_size,
+                              std::string& error);
+
 } // namespace booteable
 
 #endif // BOOTEABLE_IMAGE_IMAGEVERIFIER_HPP

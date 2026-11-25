@@ -3,8 +3,11 @@
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include <linux/fs.h>
 
 namespace booteable {
 
@@ -78,15 +81,26 @@ bool ImageFile::open_read(const std::filesystem::path& path,
         ::close(descriptor);
         return false;
     }
-    if (!S_ISREG(info.st_mode)) {
-        error = "La imagen no es un archivo regular.";
-        ::close(descriptor);
-        return false;
+    if (S_ISREG(info.st_mode)) {
+        fd_ = descriptor;
+        size_ = static_cast<std::uint64_t>(info.st_size);
+        return true;
+    }
+    if (S_ISBLK(info.st_mode)) {
+        std::uint64_t block_bytes = 0;
+        if (::ioctl(descriptor, BLKGETSIZE64, &block_bytes) != 0) {
+            error = system_error_text("No se pudo consultar el tamaño del bloque");
+            ::close(descriptor);
+            return false;
+        }
+        fd_ = descriptor;
+        size_ = block_bytes;
+        return true;
     }
 
-    fd_ = descriptor;
-    size_ = static_cast<std::uint64_t>(info.st_size);
-    return true;
+    error = "La imagen no es un archivo regular ni un dispositivo de bloque.";
+    ::close(descriptor);
+    return false;
 }
 
 bool ImageFile::write_at(std::uint64_t offset, const void* data,
