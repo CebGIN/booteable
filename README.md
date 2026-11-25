@@ -17,21 +17,19 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 
 ## Estado
 
-**WP0 y WP1 implementados.** Existen los contratos de `src/domain/`, el
-esqueleto CMake, la escena mínima de Guayaba y una aplicación EFI completa
-(`BOOTX64.EFI`):
+**WP0, WP1 y WP2 implementados.**
 
-- mensaje fijo con la Universidad, la Facultad, el grupo y el hash de
-  compilación;
-- salida por consola y por `SerialIo`, sin fallar si el puerto serie no existe;
-- espera de tecla con límite de 10 segundos y apagado limpio con
-  `ResetSystem(EfiResetShutdown)`;
-- marcador `BOOTEABLE-BOOT-OK` para la prueba en QEMU/OVMF;
-- binario PE32+ x86_64, subsistema EFI y sin dependencias de la libc de Windows.
+- **WP1** entrega la aplicación EFI completa: mensaje fijo, colores, salida por
+  consola y puerto serie, espera de tecla con límite, apagado limpio con
+  `ResetSystem(EfiResetShutdown)` y marcador `BOOTEABLE-BOOT-OK`.
+- **WP2** entrega la construcción de la imagen GPT/FAT32: MBR protector, GPT
+  primaria y de respaldo, ESP FAT32 con `EFI/BOOT/BOOTX64.EFI`, CRC32, SHA-256,
+  verificación por regiones y CLI `build`/`verify` para sectores de 512 y 4096.
+  La imagen es dispersa y determinista.
 
-La construcción GPT/FAT32, la enumeración real de dispositivos y la CLI son los
-siguientes paquetes (WP2, WP3 y WP4); por ahora `booteable-image` solo muestra su
-ayuda.
+La enumeración real de dispositivos, la escritura en la USB y el flujo completo
+de la TUI son WP3a/WP3b/WP4a/WP4b/WP5; por eso `booteable-image flash` todavía no
+escribe dispositivos.
 
 La ruta elegida es **UEFI x86_64** con tabla **GPT** y una **ESP FAT32** que
 contiene `\EFI\BOOT\BOOTX64.EFI`. Es la ruta que el equipo de prueba admite y la
@@ -71,10 +69,10 @@ Targets:
 
 | Target | Descripción |
 |---|---|
-| `booteable_core` | Núcleo headless: dominio, contratos, fake y EFI incrustado |
+| `booteable_core` | Núcleo headless: dominio, contratos, fake, CRC32/SHA-256, imagen y EFI incrustado |
 | `booteable_ui` | Escenas de la TUI sobre Guayaba |
 | `booteable` | Aplicación TUI |
-| `booteable-image` | CLI headless; `build`/`verify` llegan en WP2 |
+| `booteable-image` | CLI headless para construir, verificar y escribir una imagen |
 | `bootx64_efi` | Aplicación EFI que arranca el firmware |
 | `booteable_tests` | Suites headless registradas en CTest |
 
@@ -101,7 +99,7 @@ nuestro código. Por eso GPT y FAT32 se generan en `image/` y no se invocan
 ## Ejecutar
 
 ```bash
-./build/booteable        # WP0: escena mínima con datos simulados; F10 sale
+./build/booteable        # TUI de WP0: escena mínima con datos simulados; F10 sale
 ```
 
 En WP4 la TUI va a enumerar las USB, mostrar identificador, capacidad, serie,
@@ -109,22 +107,29 @@ puntos de montaje y la etiqueta/tamaño elegidos, y exigir la casilla de
 advertencia más `Enter` antes de escribir. Sin privilegios se podrá explorar y
 exportar una imagen, pero no escribir un dispositivo.
 
-Cuando WP2 y WP3b estén implementados, la CLI ofrecerá:
+La CLI de WP2 construye y verifica imágenes sin tocar hardware:
 
 ```bash
-# Construir una imagen de disco reproducible
+# Construir una imagen de 64 MiB con el EFI final incrustado
 ./build/booteable-image build --output build/booteable.img --size-mb 64
 
-# Verificar estructura, CRC y contenido
+# Releer estructura, CRC, FAT, árbol EFI/BOOT y SHA-256 del binario
 ./build/booteable-image verify --image build/booteable.img
 
 # Imagen para un dispositivo 4Kn (sector lógico de 4096)
 ./build/booteable-image build --output build/booteable-4kn.img \
   --sector-size 4096 --esp-mib 260
 
-# Escribir y verificar (rechaza discos del sistema)
-sudo ./build/booteable-image flash --device /dev/sdX --image build/booteable.img
+# Cambiar la etiqueta visible en FAT32 y GPT
+./build/booteable-image build --output build/lab.img --size-mb 80 \
+  --label BOOTLAB
 ```
+
+`--size-mb` es el tamaño exacto del archivo. En una imagen de 64 MiB la ESP
+automática de 64 MiB no entra junto a la GPT, así que se reduce al mayor tamaño
+posible (unos 63 MiB, por encima del mínimo FAT32). Si se pide `--esp-mib`
+explícito y no entra, el build falla. `flash` llega en WP3b; hasta entonces la
+CLI no escribe dispositivos.
 
 ## Prueba virtual
 
@@ -141,12 +146,13 @@ el marcador `BOOTEABLE-BOOT-OK` en la consola serie. Después espera el apagado
 limpio del equipo: el programa se apaga solo a los 10 s o al pulsar una tecla.
 Si faltan QEMU u OVMF, sale con código 77 para que CTest lo salte.
 
-La prueba negativa usa OVMF con Secure Boot activo y exige que el binario sin
-firma **no** arranque:
+También se puede arrancar desde la imagen GPT/FAT32 completa que construye el
+preparador, incluida una imagen 4Kn:
 
 ```bash
-./tools/run-qemu.sh --headless --secure-boot
-# QEMU/OVMF con Secure Boot: el binario sin firma fue bloqueado.
+./tools/run-qemu.sh --headless --image build/booteable.img
+./tools/run-qemu.sh --headless --image build/booteable-4kn.img \
+  --sector-size 4096
 ```
 
 ## Pruebas
@@ -157,12 +163,33 @@ ctest --test-dir build --output-on-failure
 
 Las pruebas son headless, no requieren red, root ni una USB real:
 
-- `unit`: validación y controlador falso.
+- `unit`: dominio, controlador falso, CRC32/SHA-256, geometría, GPT, FAT32,
+  roundtrip de imagen y corrupción de cada región.
 - `efi_binary`: cabecera PE32+, subsistema EFI, ausencia de imports de Windows y
   presencia del marcador.
-- `qemu_boot`: arranque real en OVMF y apagado limpio.
-- `qemu_secure_boot`: prueba negativa con Secure Boot; se salta con código 77 si
-  faltan QEMU, OVMF o las imágenes de OVMF con Secure Boot.
+- `image_cli`: `build`/`verify` en 512 y 4096, tamaño exacto, etiqueta, detección
+  de corrupción y control cruzado opcional con `fsck.vfat`.
+- `qemu_boot` y `qemu_boot_image`: arranque real en OVMF, desde la carpeta y
+  desde la imagen construida. Se saltan con código 77 si faltan QEMU u OVMF.
+- `qemu_boot_4kn`: la misma imagen con sector lógico de 4096 y ESP de 260 MiB,
+  presentada como disco virtio 4Kn.
+- `qemu_secure_boot`: prueba negativa con OVMF Secure Boot; exige que el binario
+  sin firma sea bloqueado. También se salta si faltan las imágenes de OVMF con
+  Secure Boot.
+
+## Secure Boot
+
+El binario EFI **no está firmado**. Con Secure Boot activo, el firmware del
+equipo de prueba no lo ejecutará; la herramienta no desactiva ni modifica claves.
+Para la prueba física se usa un equipo de laboratorio con autorización y Secure
+Boot desactivado. La firma con clave propia y `MOK` queda como trabajo futuro.
+
+La prueba negativa se puede repetir a mano:
+
+```bash
+./tools/run-qemu.sh --headless --secure-boot
+# QEMU/OVMF con Secure Boot: el binario sin firma fue bloqueado.
+```
 
 ## Diagrama
 
@@ -177,19 +204,19 @@ Páginas:
 Las vistas previas están en [`docs/diagramas/`](docs/diagramas/README.md) y se
 regeneran con `python3 tools/generate_diagram.py` y el CLI de draw.io.
 
-## Estructura (planificada)
+## Estructura
 
 ```text
 boot/         Aplicación EFI propia (freestanding, sin libc)
 src/
-  domain/     Tipos, enums y validación pura
-  core/       SHA-256, CRC32, formato de tamaños, utilidades
-  image/      GPT, FAT32, ensamblado y verificador de imagen
-  device/     Enumeración sysfs, política de seguridad, escritor y montajes
-  app/        Controlador, runner, estado y mocks
-  ui/         Escenas, paneles, diálogo de confirmación y progreso
-  cli/        Punto de entrada de booteable-image
-tools/        Generador del diagrama y scripts de EFI, QEMU y verificación
+  domain/     Tipos, enums y validación pura (congelado en WP0)
+  core/       SHA-256, CRC32 y utilidades de bytes
+  image/      ImageLayout, GPT, FAT32, ensamblado y verificador de imagen
+  device/     Enumeración sysfs, política, escritor y montajes (WP3)
+  app/        Controlador, runner, estado y mocks (WP4b)
+  ui/         Escenas, confirmación y progreso (WP4a)
+  cli/        build y verify; flash llega en WP3b
+tools/        build-efi, embed-efi, run-qemu, check-efi, test-image-cli
 tests/        Pruebas headless con CTest
 docs/         Requerimientos, arquitectura, glosario, plan y diagrama
 ```
@@ -202,11 +229,12 @@ docs/         Requerimientos, arquitectura, glosario, plan y diagrama
   después de cerrar; si cambió, falla sin declarar éxito.
 - Exige marcar una casilla y pulsar `Enter`, y advierte que se perderá todo el
   contenido. Desmonta las particiones montadas antes de escribir.
-- Escribe la imagen completa, hace `fsync`, relee el dispositivo y compara
-  SHA-256 antes de informar "verificado". Una operación cancelada o interrumpida
-  queda marcada como **incompleta**.
-- El programa de arranque no escribe en discos: solo usa consola/serie y espera
-  una tecla.
+- WP2 construye la imagen, hace `fsync`, la relee y compara sus regiones antes de
+  informar éxito. WP3b hará lo mismo sobre el dispositivo: escribir, sincronizar,
+  releer y comparar SHA-256. Una operación cancelada o interrumpida quedará
+  marcada como **incompleta**.
+- El programa de arranque no escribe en discos: solo usa consola/serie, espera
+  una tecla con límite y se apaga con `ResetSystem`.
 - Secure Boot bloquea binarios sin firma. La herramienta **no** desactiva ni
   altera claves: si el equipo lo tiene activo, se documenta el requisito y se
   prueba en un equipo de laboratorio con autorización.
