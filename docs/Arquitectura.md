@@ -55,7 +55,9 @@ Principios que gobiernan el diseño:
 
 ## 3. Vista de componentes
 
-El diagrama de clases (página **1 · Clases**) muestra los tipos y contratos; la
+La página **1 · Componentes** muestra los módulos agrupados por mundo (proceso
+Linux y firmware UEFI), el medio USB como puente y el contrato de formato como
+pieza compartida. La página **2 · Clases** muestra los tipos y contratos. La
 frontera entre el preparador y el firmware se resume así:
 
 ```text
@@ -176,7 +178,7 @@ x86_64-w64-mingw32-g++ \
 
 ## 5. Modelo de dominio
 
-La página **1 · Clases** del diagrama muestra estos tipos. Son datos puros, sin
+La página **2 · Clases** del diagrama muestra estos tipos. Son datos puros, sin
 herencia ni dependencias de plataforma.
 
 ```cpp
@@ -538,7 +540,7 @@ las pruebas como control cruzado, nunca en tiempo de ejecución.
 
 ## 8. Flujo de preparación
 
-La página **2 · Secuencia** muestra el camino feliz y la cancelación.
+La página **3 · Secuencia** muestra el camino feliz y la cancelación.
 
 ```text
 UI            Controller        ImageBuilder       DeviceWriter      Device
@@ -595,7 +597,8 @@ comparar; un cambio produce `Disconnected` y el resultado no es `Verified`.
 
 ## 9. Máquina de estados
 
-La máquina de estados es la siguiente:
+La máquina de estados es la siguiente; la página **4 · Estados** la representa
+junto con los terminales de error y cancelación.
 
 ```text
 Idle → Enumerating → Validating → Confirming → Building
@@ -896,13 +899,19 @@ previas se exportan con el CLI de draw.io. Páginas:
 
 | # | Página | Contenido | Vista previa |
 |---|---|---|---|
-| 1 | Clases | Enumeraciones, structs del dominio, contratos e implementaciones | [PNG](diagramas/01-clases.png) |
-| 2 | Secuencia | Preparación completa y cancelación | [PNG](diagramas/02-secuencia.png) |
-| 3 | Leyenda | Relaciones UML, visibilidad y estereotipos | [PNG](diagramas/03-leyenda.png) |
+| 1 | Componentes | Módulos por mundo, medio USB, cadena de arranque y contrato de formato | [PNG](diagramas/01-componentes.png) |
+| 2 | Clases | Enumeraciones, structs del dominio, contratos e implementaciones | [PNG](diagramas/02-clases.png) |
+| 3 | Secuencia | Preparación completa y cancelación | [PNG](diagramas/03-secuencia.png) |
+| 4 | Estados | `PrepStage` de la preparación y terminales | [PNG](diagramas/04-estados.png) |
+| 5 | Leyenda | Relaciones UML, visibilidad y estereotipos | [PNG](diagramas/05-leyenda.png) |
 
 Convenciones:
 
-- Diagrama monocromo, sin colores ni contenedores decorativos.
+- Diagrama monocromo; los contenedores separan mundos (preparador, firmware) y
+  el medio, no son decoración.
+- Componentes con `shape=component` y el contrato de formato con
+  `shape=package`; las notas usan `shape=note`.
+- Flecha abierta: uso o dependencia; discontinua: relación puntual o contrato.
 - Clases con `swimlane` y compartimentos nativos: nombre / datos / métodos.
 - Estereotipos `«enumeration»`, `«struct»`, `«class»` e `«interface»`.
 - Flecha con triángulo hueco y línea discontinua: realización.
@@ -910,6 +919,7 @@ Convenciones:
 - Rombo relleno en el origen: composición; rombo hueco: agregación.
 - En secuencia, `shape=umlLifeline` y mensajes con flecha rellena; los retornos
   son discontinuos.
+- En estados, rectángulos redondeados para etapas y gris claro para terminales.
 
 Regeneración de las vistas previas (el snap de draw.io no puede escribir en
 `/tmp`; usar una ruta del proyecto):
@@ -917,7 +927,7 @@ Regeneración de las vistas previas (el snap de draw.io no puede escribir en
 ```bash
 python3 tools/generate_diagram.py
 mkdir -p build/diagramas
-for i in 1 2 3; do
+for i in 1 2 3 4 5; do
   drawio -x -f png -o build/diagramas/p$i.png -p $i -s 1.4 docs/diagrama.drawio
 done
 ```

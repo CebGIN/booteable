@@ -48,7 +48,7 @@ física.
 | [`docs/Arquitectura.md`](docs/Arquitectura.md) | ADRs, componentes, modelo, formato de imagen, seguridad, UI y pruebas |
 | [`docs/Glosario.md`](docs/Glosario.md) | Términos de UEFI, particiones, FAT32 y de la interfaz |
 | [`docs/Plan-de-trabajo.md`](docs/Plan-de-trabajo.md) | Paquetes de trabajo, responsabilidades y criterios de salida |
-| [`docs/diagrama.drawio`](docs/diagrama.drawio) | Clases, secuencia de preparación y leyenda UML |
+| [`docs/diagrama.drawio`](docs/diagrama.drawio) | Componentes, clases, secuencia, estados y leyenda UML |
 
 ## Requisitos
 
@@ -227,11 +227,14 @@ La prueba negativa se puede repetir a mano:
 
 Páginas:
 
-1. **Clases**: enums, structs del dominio, contratos e implementaciones, con
+1. **Componentes**: los módulos agrupados por mundo, el medio USB como puente y
+   la cadena firmware → servicios UEFI → programa propio.
+2. **Clases**: enums, structs del dominio, contratos e implementaciones, con
    compartimentos y relaciones UML nativas.
-2. **Secuencia**: enumerar, validar, confirmar, construir, escribir, sincronizar,
+3. **Secuencia**: enumerar, validar, confirmar, construir, escribir, sincronizar,
    verificar y cancelar.
-3. **Leyenda**: relaciones UML, visibilidad y estereotipos.
+4. **Estados**: la máquina `PrepStage` y los terminales de error y cancelación.
+5. **Leyenda**: relaciones UML, visibilidad y estereotipos.
 
 Las vistas previas están en [`docs/diagramas/`](docs/diagramas/README.md) y se
 regeneran con `python3 tools/generate_diagram.py` y el CLI de draw.io.

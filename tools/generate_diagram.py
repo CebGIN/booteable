@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Genera docs/diagrama.drawio con UML nativo de draw.io.
 
-Tres páginas, estilo monocromo, siguiendo el diagrama de tasks-lens:
-  1. Clases    (swimlane con compartimentos, flechas UML nativas)
-  2. Secuencia (umlLifeline)
-  3. Leyenda   (muestras de relaciones y visibilidad)
+Cinco páginas, estilo monocromo:
+  1. Componentes (contenedores por mundo, módulos, medio USB y contrato)
+  2. Clases     (swimlane con compartimentos, flechas UML nativas)
+  3. Secuencia  (umlLifeline)
+  4. Estados    (PrepStage y terminales)
+  5. Leyenda    (muestras de relaciones y visibilidad)
 """
 import os
 from xml.sax.saxutils import quoteattr
@@ -37,10 +39,28 @@ ST_LIFELINE = ("shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;ht
                "container=1;collapsible=0;recursiveResize=0;outlineConnect=0;"
                "fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;")
 ST_MSG = ("endArrow=block;endFill=1;html=1;rounded=0;fontSize=11;"
-           "labelBackgroundColor=#ffffff;verticalAlign=bottom;")
+          "labelBackgroundColor=#ffffff;verticalAlign=bottom;")
 ST_RET = ("endArrow=open;endFill=0;dashed=1;html=1;rounded=0;fontSize=11;"
-           "labelBackgroundColor=#ffffff;verticalAlign=bottom;")
+          "labelBackgroundColor=#ffffff;verticalAlign=bottom;")
 ST_TEXT = "text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;"
+
+# --- Estilos de la vista de componentes y de estados ------------------------
+ST_TITLE = ("text;html=1;whiteSpace=wrap;overflow=visible;rounded=0;align=left;"
+            "verticalAlign=top;fontSize=11;")
+ST_PROC = ("swimlane;html=1;startSize=46;collapsible=0;container=1;fontStyle=1;"
+           "verticalAlign=top;align=center;fillColor=#f5f5f5;strokeColor=#000000;"
+           "strokeWidth=1.2;whiteSpace=wrap;rounded=0;")
+ST_COMPONENT = ("shape=component;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;"
+                "fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.2;fontSize=11;spacing=4;")
+ST_PACKAGE = ("shape=package;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;"
+              "fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;fontSize=11;")
+ST_NOTE = ("shape=note;whiteSpace=wrap;html=1;size=10;fillColor=#ffffff;"
+           "strokeColor=#000000;fontSize=9;align=left;verticalAlign=top;spacing=4;")
+ST_ARROW = ("edgeStyle=none;rounded=0;orthogonalLoop=0;html=1;strokeColor=#000000;"
+            "strokeWidth=1;endArrow=open;endFill=0;labelBackgroundColor=#ffffff;"
+            "fontSize=10;align=center;verticalAlign=middle;")
+ST_STATE = ("rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;"
+            "strokeWidth=1.2;fontSize=11;align=center;verticalAlign=middle;spacing=4;")
 
 
 def klass(cid, label, members, x, y, w, methods=(), dashed=False):
@@ -77,6 +97,13 @@ def klass(cid, label, members, x, y, w, methods=(), dashed=False):
     return out, h
 
 
+def box(cid, style, value, x, y, w, h):
+    """Celda rectangular simple (componente, contenedor, nota o estado)."""
+    return (f'<mxCell id="{cid}" parent="1" style="{style}" value={quoteattr(value)} '
+            f'vertex="1"><mxGeometry height="{h}" width="{w}" x="{x}" y="{y}" '
+            f'as="geometry"/></mxCell>')
+
+
 def rel(cid, src, dst, style, value="", exit_xy=None, entry_xy=None, points=None):
     extra = ""
     if exit_xy:
@@ -107,13 +134,168 @@ def page(pid, name, cells):
 pages = []
 
 # =============================================================== Página 1
+# Componentes: dos mundos (preparador Linux y firmware UEFI) unidos por el
+# medio preparado; el contrato de formato se muestra aparte, como en mem-test.
+c = []
+c.append(box(
+    "cmp_title", ST_TITLE,
+    "<b><font style='font-size:18px'>Arquitectura de componentes · booteable</font></b><br>"
+    "<font style='font-size:10px'>El preparador construye y verifica el medio; el firmware "
+    "ejecuta el programa EFI. Dos mundos, un contrato de formato.</font>",
+    40, 12, 1120, 50))
+
+c.append(box(
+    "cmp_prep", ST_PROC,
+    "<b>Preparador · proceso Linux</b><br>"
+    "<font style='font-size:10px;color:#555555'>TUI Guayaba · syscalls Linux · "
+    "construir no requiere root; escribir sí</font>",
+    40, 70, 780, 700))
+c.append(box(
+    "cmp_fw", ST_PROC,
+    "<b>Equipo de prueba · firmware UEFI</b><br>"
+    "<font style='font-size:10px;color:#555555'>x86_64 · sin SO · "
+    "solo servicios de arranque</font>",
+    1050, 70, 550, 700))
+
+# Módulos del preparador
+c.append(box(
+    "cmp_ui", ST_COMPONENT,
+    "<b>ui/</b><br><font style='font-size:9px;color:#666666'>sin lógica de negocio</font><br>"
+    "MainScene · ConfirmDialog · ProgressScene<br>ResultScene · UiFormat<br>"
+    "Solo incluye app/ y domain/",
+    70, 140, 720, 95))
+c.append(box(
+    "cmp_app", ST_COMPONENT,
+    "<b>app/</b><br><font style='font-size:9px;color:#666666'>dueño del ciclo de vida</font><br>"
+    "PrepController · PrepRunner · CancellationToken<br>FakePrepController<br>"
+    "Orquesta etapas, progreso y cancelación",
+    70, 270, 720, 95))
+c.append(box(
+    "cmp_image", ST_COMPONENT,
+    "<b>image/</b><br><font style='font-size:9px;color:#666666'>la imagen se construye, "
+    "no se copia</font><br>BootImageBuilder · GptWriter · Fat32Writer<br>"
+    "ImageVerifier · ImageLayout",
+    70, 405, 325, 105))
+c.append(box(
+    "cmp_device", ST_COMPONENT,
+    "<b>device/</b><br><font style='font-size:9px;color:#666666'>el único que toca "
+    "/sys y /dev</font><br>SysfsBlockDeviceSource · SafetyPolicy<br>"
+    "MountManager · PosixDeviceWriter",
+    435, 405, 315, 105))
+c.append(box(
+    "cmp_core", ST_COMPONENT,
+    "<b>core/</b><br><font style='font-size:9px;color:#666666'>sin Linux ni Guayaba</font><br>"
+    "Sha256 · Crc32 · SizeFormat · Bytes · usado por image/ y device/",
+    70, 545, 680, 75))
+c.append(box(
+    "cmp_cli", ST_COMPONENT,
+    "<b>cli/ · booteable-image</b><br><font style='font-size:9px;color:#666666'>"
+    "entrada headless</font><br>build · verify · flash · compone booteable_core sin UI",
+    70, 655, 680, 75))
+
+# Medio preparado: el puente entre los dos mundos
+c.append(box(
+    "cmp_usb", ST_PACKAGE,
+    "<b>Medio USB preparado</b><br><font style='font-size:9px;color:#666666'>"
+    "imagen dispersa y determinista</font><br>GPT primaria + respaldo<br>ESP FAT32 sin LFN<br>"
+    "<font face='monospace' style='font-size:9px'>\\EFI\\BOOT\\<br>BOOTX64.EFI</font>",
+    800, 390, 230, 170))
+
+# Cadena del firmware
+c.append(box(
+    "cmp_fwinfo", ST_COMPONENT,
+    "<b>Firmware UEFI</b><br><font style='font-size:9px;color:#666666'>"
+    "OVMF en QEMU o equipo real</font><br>Busca <font face='monospace'>\\EFI\\BOOT\\"
+    "BOOTX64.EFI</font> en la ESP",
+    1080, 140, 490, 80))
+c.append(box(
+    "cmp_svc", ST_COMPONENT,
+    "<b>EFI_BOOT_SERVICES · EFI_SYSTEM_TABLE</b><br>"
+    "<font style='font-size:9px;color:#666666'>protocolos de arranque</font><br>"
+    "ConOut · ConIn · Stall · SerialIo<br>RuntimeServices-&gt;ResetSystem",
+    1080, 255, 490, 100))
+c.append(box(
+    "cmp_boot", ST_COMPONENT,
+    "<b>boot/ · BOOTX64.EFI</b><br><font style='font-size:9px;color:#666666'>"
+    "PE32+ · -nostdlib · sin EDK2</font><br>efi_main · efi.cpp",
+    1080, 390, 490, 100))
+c.append(box(
+    "cmp_out", ST_COMPONENT,
+    "<b>Salida visible</b><br><font style='font-size:9px;color:#666666'>"
+    "consola de texto y puerto serie</font><br>Mensaje del grupo + "
+    "<b>BOOTEABLE-BOOT-OK</b>",
+    1080, 525, 490, 90))
+
+# Notas del mundo UEFI
+c.append(box(
+    "cmp_note_secure", ST_NOTE,
+    "<b>Secure Boot</b> · el PE no está firmado: con Secure Boot activo no arranca. "
+    "Se documenta y se prueba en un equipo de laboratorio con autorización.",
+    1080, 645, 490, 55))
+c.append(box(
+    "cmp_note_embed", ST_NOTE,
+    "<b>Incrustación</b> · el EFI se compila con MinGW-w64 y se enlaza como arreglo "
+    "en el preparador; no se copia un archivo externo.",
+    1080, 710, 490, 50))
+
+# Contrato compartido (solo formato, no código)
+c.append(box(
+    "cmp_format", ST_PACKAGE,
+    "<b>Formato compartido · contrato del medio (no se comparte código)</b><br>"
+    "GPT primaria y de respaldo · ESP FAT32 sin LFN · ruta \\EFI\\BOOT\\BOOTX64.EFI · "
+    "sectores 512 / 4096 · etiqueta BOOTEABLE<br>"
+    "El preparador usa syscalls de Linux; el arranque usa EFI_BOOT_SERVICES. "
+    "Solo coinciden en el formato byte a byte.",
+    40, 820, 1560, 95))
+
+# Flujo dentro del preparador
+c.append(rel("cmp_e_ui_app", "cmp_ui", "cmp_app", ST_ARROW,
+             "config + confirmación", (0.5, 1), (0.5, 0)))
+c.append(rel("cmp_e_app_image", "cmp_app", "cmp_image", ST_ARROW,
+             "build(spec)", (0.3, 1), (0.5, 0)))
+c.append(rel("cmp_e_app_device", "cmp_app", "cmp_device", ST_ARROW,
+             "validar · desmontar · escribir", (0.7, 1), (0.5, 0)))
+c.append(rel("cmp_e_image_device", "cmp_image", "cmp_device", ST_ARROW + "dashed=1;",
+             "manifiesto", (1.0, 0.5), (0.0, 0.5)))
+c.append(rel("cmp_e_image_core", "cmp_image", "cmp_core", ST_ARROW,
+             "CRC32 · SHA-256", (0.5, 1), (0.25, 0)))
+c.append(rel("cmp_e_device_core", "cmp_device", "cmp_core", ST_ARROW,
+             "SHA-256", (0.5, 1), (0.75, 0)))
+c.append(rel("cmp_e_cli_core", "cmp_cli", "cmp_core", ST_ARROW,
+             "mismas piezas, sin UI", (0.5, 0), (0.5, 1)))
+
+# Del preparador al medio y del medio al firmware
+c.append(rel("cmp_e_dev_usb", "cmp_device", "cmp_usb", ST_ARROW,
+             "write · fsync · relectura", (1.0, 0.5), (0.0, 0.40)))
+c.append(rel("cmp_e_usb_boot", "cmp_usb", "cmp_boot", ST_ARROW,
+             "", (1.0, 0.30), (0.0, 0.5)))
+
+# Cadena del firmware
+c.append(rel("cmp_e_fw_svc", "cmp_fwinfo", "cmp_svc", ST_ARROW,
+             "carga", (0.5, 1), (0.5, 0)))
+c.append(rel("cmp_e_svc_boot", "cmp_svc", "cmp_boot", ST_ARROW,
+             "invoca efi_main", (0.5, 1), (0.5, 0)))
+c.append(rel("cmp_e_boot_out", "cmp_boot", "cmp_out", ST_ARROW,
+             "escribe", (0.5, 1), (0.5, 0)))
+
+# Ambos mundos dependen del contrato de formato
+c.append(rel("cmp_e_prep_fmt", "cmp_prep", "cmp_format", ST_ARROW + "dashed=1;",
+             "constantes", (0.35, 1), (0.18, 0)))
+c.append(rel("cmp_e_fw_fmt", "cmp_fw", "cmp_format", ST_ARROW + "dashed=1;",
+             "", (0.5, 1), (0.82, 0)))
+
+pages.append(page("components", "1 · Componentes", c))
+
+# =============================================================== Página 2
 c = []
 classes = {}
+
 
 def add(*args, **kwargs):
     cells, h = klass(*args, **kwargs)
     c.extend(cells)
     classes[args[0]] = (args[3], args[4], args[5], h)  # x, y, w, h
+
 
 # Enumeraciones
 add("cls_stage", "«enumeration» PrepStage", [
@@ -216,9 +398,9 @@ c.append(rel("rel_writer", "impl_writer", "if_writer", ST_REAL, "",
              (0.5, 0.0), (0.5, 1.0)))
 c.append(rel("rel_verify", "impl_verify", "if_verify", ST_REAL, "",
              (0.5, 0.0), (0.5, 1.0)))
-pages.append(page("classes", "1 · Clases", c))
+pages.append(page("classes", "2 · Clases", c))
 
-# =============================================================== Página 2
+# =============================================================== Página 3
 c = []
 lifelines = [
     ("life_ui", "UI\nMainScene", 80),
@@ -266,9 +448,98 @@ msgs = [
 ]
 for m in msgs:
     c.append(msg(*m))
-pages.append(page("sequence", "2 · Secuencia", c))
+pages.append(page("sequence", "3 · Secuencia", c))
 
-# =============================================================== Página 3
+# =============================================================== Página 4
+# Estados: serpentina Idle..Done y terminales de error/cancelación.
+c = []
+c.append(box(
+    "st_title", ST_TITLE,
+    "<b><font style='font-size:18px'>Estados de la preparación</font></b><br>"
+    "<font style='font-size:10px'>PrepStage · la cancelación no es un éxito; "
+    "el medio cancelado queda Incomplete.</font>",
+    40, 12, 1000, 50))
+
+states = [
+    ("st_idle", "<b>Idle</b><br><font style='font-size:9px'>sin preparación activa</font>",
+     60, 110, 180, 80, ""),
+    ("st_enum", "<b>Enumerating</b><br><font style='font-size:9px'>lee /sys/block</font>",
+     280, 110, 180, 80, ""),
+    ("st_val", "<b>Validating</b><br><font style='font-size:9px'>SafetyPolicy + validación</font>",
+     500, 110, 180, 80, ""),
+    ("st_conf", "<b>Confirming</b><br><font style='font-size:9px'>casilla + Enter</font>",
+     720, 110, 180, 80, ""),
+    ("st_build", "<b>Building</b><br><font style='font-size:9px'>GPT + FAT32 + EFI</font>",
+     940, 110, 180, 80, ""),
+    ("st_unmount", "<b>Unmounting</b><br><font style='font-size:9px'>umount2(MNT_DETACH)</font>",
+     940, 280, 180, 80, ""),
+    ("st_open", "<b>Opening</b><br><font style='font-size:9px'>O_RDWR | O_EXCL</font>",
+     720, 280, 180, 80, ""),
+    ("st_write", "<b>Writing</b><br><font style='font-size:9px'>bloques de 1 MiB</font>",
+     500, 280, 180, 80, ""),
+    ("st_sync", "<b>Syncing</b><br><font style='font-size:9px'>fsync + BLKFLSBUF</font>",
+     280, 280, 180, 80, ""),
+    ("st_verify", "<b>Verifying</b><br><font style='font-size:9px'>relee y compara SHA-256</font>",
+     60, 280, 180, 80, ""),
+    ("st_done", "<b>Done</b><br><font style='font-size:9px'>PrepOutcome::Verified</font>",
+     60, 450, 180, 90, "#f5f5f5"),
+    ("st_incomplete", "<b>Incomplete</b><br><font style='font-size:9px'>medio no verificado</font>",
+     320, 450, 180, 90, "#f5f5f5"),
+    ("st_cancelled", "<b>Cancelled</b><br><font style='font-size:9px'>cancelación pedida</font>",
+     580, 450, 180, 90, "#f5f5f5"),
+    ("st_failed", "<b>Failed</b><br><font style='font-size:9px'>error con etapa exacta</font>",
+     840, 450, 180, 90, "#f5f5f5"),
+]
+for sid, label, x, y, w, h, fill in states:
+    style = ST_STATE + (f"fillColor={fill};" if fill else "")
+    c.append(box(sid, style, label, x, y, w, h))
+
+# Camino feliz en serpentina
+c.append(rel("st_e_idle_enum", "st_idle", "st_enum", ST_ARROW,
+             "F5 / iniciar", (1.0, 0.5), (0.0, 0.5)))
+c.append(rel("st_e_enum_val", "st_enum", "st_val", ST_ARROW,
+             "dispositivos", (1.0, 0.5), (0.0, 0.5)))
+c.append(rel("st_e_val_conf", "st_val", "st_conf", ST_ARROW,
+             "apto", (1.0, 0.5), (0.0, 0.5)))
+c.append(rel("st_e_conf_build", "st_conf", "st_build", ST_ARROW,
+             "casilla + Enter", (1.0, 0.5), (0.0, 0.5)))
+c.append(rel("st_e_build_unmount", "st_build", "st_unmount", ST_ARROW,
+             "build listo", (0.5, 1.0), (0.5, 0.0)))
+c.append(rel("st_e_unmount_open", "st_unmount", "st_open", ST_ARROW,
+             "desmontado", (0.0, 0.5), (1.0, 0.5)))
+c.append(rel("st_e_open_write", "st_open", "st_write", ST_ARROW,
+             "O_EXCL", (0.0, 0.5), (1.0, 0.5)))
+c.append(rel("st_e_write_sync", "st_write", "st_sync", ST_ARROW,
+             "bloques 1 MiB", (0.0, 0.5), (1.0, 0.5)))
+c.append(rel("st_e_sync_verify", "st_sync", "st_verify", ST_ARROW,
+             "fsync + BLKFLSBUF", (0.0, 0.5), (1.0, 0.5)))
+c.append(rel("st_e_verify_done", "st_verify", "st_done", ST_ARROW,
+             "SHA-256 coincide", (0.5, 1.0), (0.5, 0.0)))
+
+# Terminales de error y cancelación
+c.append(rel("st_e_open_failed", "st_open", "st_failed", ST_ARROW + "dashed=1;",
+             "EACCES / EIO", (0.5, 1.0), (0.5, 0.0)))
+c.append(rel("st_e_write_cancel", "st_write", "st_cancelled", ST_ARROW + "dashed=1;",
+             "cancelar", (0.5, 1.0), (0.5, 0.0)))
+c.append(rel("st_e_verify_incomplete", "st_verify", "st_incomplete", ST_ARROW + "dashed=1;",
+             "cancelado a mitad", (0.5, 1.0), (0.5, 0.0)))
+
+c.append(box(
+    "st_note_terms", ST_NOTE,
+    "<b>Terminales</b> · <b>Done</b> solo se alcanza con "
+    "<font face='monospace'>PrepOutcome::Verified</font>. <b>Failed</b> agrupa "
+    "PermissionDenied, InvalidTarget, Disconnected, InsufficientSpace, BuildError, "
+    "DeviceError y UnmountError con la etapa exacta.",
+    40, 630, 1340, 55))
+c.append(box(
+    "st_note_restart", ST_NOTE,
+    "<b>Incomplete</b> es una cancelación durante Writing o Verifying: el medio no se "
+    "declara verificado. Volver a Idle exige nueva enumeración y nueva confirmación.",
+    40, 700, 1340, 45))
+
+pages.append(page("states", "4 · Estados", c))
+
+# =============================================================== Página 5
 c = []
 c.append(
     '<mxCell id="ley_title" parent="1" style="text;html=1;whiteSpace=wrap;'
@@ -305,8 +576,7 @@ for i, (title, desc, y, style) in enumerate(legend_items):
     c.append(
         f'<mxCell id="ley_t{i}" parent="1" style="{ST_TEXT}" '
         f'value={quoteattr("<b>" + title + "</b><br>" + desc)} vertex="1">'
-        f'<mxGeometry height="50" width="380" x="260" y="{y - 25}" as="geometry"/>'
-        f'</mxCell>'
+        f'<mxGeometry height="50" width="380" x="260" y="{y - 25}" as="geometry"/></mxCell>'
     )
 
 c.append(
@@ -320,9 +590,9 @@ c.append(
     f'value="Diagrama monocromo. Los compartimentos siguen el orden nombre / datos / métodos." vertex="1">'
     f'<mxGeometry height="40" width="620" x="40" y="890" as="geometry"/></mxCell>'
 )
-pages.append(page("legend", "3 · Leyenda", c))
+pages.append(page("legend", "5 · Leyenda", c))
 
-xml = ('<mxfile host="app.diagrams.net" pages="3">\n' + "\n".join(pages) + "\n</mxfile>\n")
+xml = ('<mxfile host="app.diagrams.net" pages="5">\n' + "\n".join(pages) + "\n</mxfile>\n")
 with open(OUT, "w", encoding="utf-8") as fh:
     fh.write(xml)
 print("escrito", OUT, len(xml), "bytes")
