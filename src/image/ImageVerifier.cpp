@@ -170,6 +170,37 @@ std::string canonical_manifest_hash(const ImageManifest& manifest) {
     return sha256_hex(canonical.data(), canonical.size());
 }
 
+bool detect_image_sector_size(const std::filesystem::path& image,
+                              std::uint32_t& sector_size,
+                              std::string& error) {
+    error.clear();
+    sector_size = 0;
+
+    ImageFile file;
+    if (!file.open_read(image, error)) {
+        return false;
+    }
+
+    std::uint8_t signature[8];
+    std::string read_error;
+    if (file.size() >= 512 + sizeof(signature) &&
+        file.read_at(512, signature, sizeof(signature), read_error) &&
+        std::memcmp(signature, "EFI PART", 8) == 0) {
+        sector_size = 512;
+        return true;
+    }
+    read_error.clear();
+    if (file.size() >= 4096 + sizeof(signature) &&
+        file.read_at(4096, signature, sizeof(signature), read_error) &&
+        std::memcmp(signature, "EFI PART", 8) == 0) {
+        sector_size = 4096;
+        return true;
+    }
+
+    error = "No se encontró una cabecera GPT primaria en 512 ni en 4096.";
+    return false;
+}
+
 bool ImageVerifier::verify(const std::filesystem::path& image,
                            ImageManifest& out, std::string& error) const {
     error.clear();

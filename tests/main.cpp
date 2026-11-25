@@ -11,6 +11,9 @@ void run_fat32_tests();
 void run_image_roundtrip_tests();
 void run_safety_policy_tests();
 void run_sysfs_source_tests();
+void run_mount_manager_tests();
+void run_device_writer_tests();
+void run_flash_tests();
 
 namespace booteable::test {
 int failures = 0;
@@ -31,6 +34,9 @@ int main() {
     run_image_roundtrip_tests();
     run_safety_policy_tests();
     run_sysfs_source_tests();
+    run_mount_manager_tests();
+    run_device_writer_tests();
+    run_flash_tests();
 
     if (booteable::test::failures != 0) {
         std::cerr << booteable::test::failures << " comprobación(es) fallaron.\n";
