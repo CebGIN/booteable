@@ -182,3 +182,20 @@ add_test(NAME image_cli
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-image-cli.sh"
             "$<TARGET_FILE:booteable-image>")
 set_tests_properties(image_cli PROPERTIES TIMEOUT 180)
+
+# Arranque real desde la imagen GPT/FAT32 construida por el preparador.
+add_test(NAME qemu_boot_image
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-qemu-image.sh"
+            "$<TARGET_FILE:booteable-image>")
+set_tests_properties(qemu_boot_image PROPERTIES
+    SKIP_RETURN_CODE 77
+    TIMEOUT 120)
+
+# La misma prueba con sector lógico de 4096 y ESP de 260 MiB.
+add_test(NAME qemu_boot_4kn
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-qemu-image.sh"
+            "$<TARGET_FILE:booteable-image>"
+            "${CMAKE_BINARY_DIR}/qemu-image-4kn.img" 4096)
+set_tests_properties(qemu_boot_4kn PROPERTIES
+    SKIP_RETURN_CODE 77
+    TIMEOUT 150)
