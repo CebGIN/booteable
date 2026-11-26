@@ -52,7 +52,8 @@ public:
     std::string write_block_reason() const override;
     bool export_image(const PrepConfig& config, std::string& error) override;
     bool export_default_image(PrepConfig& config, std::string& image_path,
-                              std::string& error) override;
+                              std::string& error,
+                              ExportGeometry geometry) override;
 
     static bool default_can_write();
 

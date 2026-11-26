@@ -26,11 +26,13 @@ public:
     bool can_write() const override;
     std::string write_block_reason() const override;
     bool export_default_image(PrepConfig& config, std::string& image_path,
-                              std::string& error) override;
+                              std::string& error,
+                              ExportGeometry geometry) override;
 
     // Último config recibido por export_default_image(); permite comprobar que
     // la UI exporta el dispositivo seleccionado sin tocar el disco.
     const PrepConfig& last_export() const { return last_export_; }
+    ExportGeometry last_export_geometry() const { return last_export_geometry_; }
     bool has_export() const { return has_export_; }
 
     // Ayuda para las pruebas: simula un error en la etapa indicada.
@@ -58,6 +60,7 @@ private:
     bool can_write_ = true;
     std::string write_block_reason_;
     PrepConfig last_export_;
+    ExportGeometry last_export_geometry_ = ExportGeometry::Selected;
     bool has_export_ = false;
 };
 

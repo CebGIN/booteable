@@ -77,6 +77,7 @@ public:
     bool wait_for_cancel = false;
     bool throw_now = false;
     bool build_ok = true;
+    std::optional<PrepConfig> last_build;
 
     PrepResult run(const PrepConfig& config, const std::atomic_bool& cancel,
                    const std::function<void(const PrepProgress&)>& progress) override {
@@ -121,6 +122,7 @@ public:
     ImageBuildResult build_image(const PrepConfig& config,
                                  const std::filesystem::path&) override {
         ++builds;
+        last_build = config;
         ImageBuildResult result;
         if (!build_ok) {
             result.error = "construcción simulada fallida";
@@ -216,6 +218,26 @@ void test_export_image() {
     runner.build_ok = false;
     CHECK(!controller.export_image(config, error));
     CHECK(error.find("simulada") != std::string::npos);
+}
+
+void test_export_standard_geometry() {
+    FakeSource source;
+    FakeRunner runner;
+    PrepController controller(source, runner, {}, [] { return true; });
+
+    PrepConfig config = valid_config();
+    config.device.size_bytes = 32ull * 1024ull * 1024ull * 1024ull;
+    std::string image_path;
+    std::string error;
+    CHECK(controller.export_default_image(
+        config, image_path, error, booteable::ExportGeometry::Standard));
+    CHECK_EQ(runner.builds.load(), 1);
+    CHECK(runner.last_build.has_value());
+    CHECK_EQ(runner.last_build->device.size_bytes, booteable::kMib * 64ull);
+    CHECK_EQ(runner.last_build->device.logical_sector, 512u);
+    CHECK(runner.last_build->overwrite_confirmed);
+    CHECK(image_path.find("booteable-export-64mib.img") != std::string::npos);
+    CHECK_EQ(config.image_path, image_path);
 }
 
 void test_cancel_during_write() {
@@ -371,6 +393,7 @@ void run_prep_controller_tests() {
     test_controller_validation();
     test_permission_denied();
     test_export_image();
+    test_export_standard_geometry();
     test_cancel_during_write();
     test_runner_exception_does_not_crash();
     test_ui_with_real_controller();

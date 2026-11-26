@@ -34,9 +34,11 @@ public:
     }
 
     // Exportación con la política de ruta del controlador: la UI no arma rutas
-    // ni crea directorios. `image_path` recibe la ruta efectiva.
+    // ni crea directorios. `image_path` recibe la ruta efectiva. `Selected`
+    // replica la geometría de la USB elegida; `Standard` genera 64 MiB/512.
     virtual bool export_default_image(PrepConfig&, std::string& image_path,
-                                      std::string& error) {
+                                      std::string& error,
+                                      ExportGeometry = ExportGeometry::Selected) {
         image_path.clear();
         error = "El controlador no permite exportar imágenes.";
         return false;

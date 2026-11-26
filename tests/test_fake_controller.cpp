@@ -84,4 +84,31 @@ void run_fake_controller_tests() {
         CHECK(!four_kn.start(config));
         CHECK(four_kn.result().outcome == PrepOutcome::InvalidTarget);
     }
+
+    {
+        // Exportación estándar: 64 MiB/512, sin depender de la USB elegida.
+        FakePrepController exporting;
+        PrepConfig config = valid_config(devices[0]);
+        config.device.size_bytes = 32ull * 1024ull * 1024ull * 1024ull;
+        std::string image_path;
+        std::string error;
+        CHECK(exporting.export_default_image(
+            config, image_path, error, booteable::ExportGeometry::Standard));
+        CHECK_EQ(exporting.last_export_geometry(),
+                 booteable::ExportGeometry::Standard);
+        CHECK_EQ(exporting.last_export().device.size_bytes,
+                 booteable::kMib * 64ull);
+        CHECK_EQ(exporting.last_export().device.logical_sector, 512u);
+        CHECK(image_path.find("64mib") != std::string::npos);
+
+        // Exportación seleccionada: conserva la geometría del destino.
+        PrepConfig selected = valid_config(devices[0]);
+        CHECK(exporting.export_default_image(
+            selected, image_path, error, booteable::ExportGeometry::Selected));
+        CHECK_EQ(exporting.last_export_geometry(),
+                 booteable::ExportGeometry::Selected);
+        CHECK_EQ(exporting.last_export().device.size_bytes,
+                 devices[0].size_bytes);
+        CHECK(image_path.find("booteable-export-sdb") != std::string::npos);
+    }
 }

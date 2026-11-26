@@ -304,16 +304,28 @@ std::string FakePrepController::write_block_reason() const {
 
 bool FakePrepController::export_default_image(PrepConfig& config,
                                               std::string& image_path,
-                                              std::string& error) {
+                                              std::string& error,
+                                              ExportGeometry geometry) {
     std::string name = "booteable-export";
-    const std::size_t slash = config.device.path.find_last_of('/');
-    if (slash != std::string::npos && slash + 1 < config.device.path.size()) {
-        name += "-" + config.device.path.substr(slash + 1);
+    if (geometry == ExportGeometry::Standard) {
+        config.device.path = "(estandar)";
+        config.device.size_bytes = 64ull * kMib;
+        config.device.logical_sector = 512;
+        config.esp_bytes = 0;
+        config.overwrite_confirmed = true;
+        name += "-64mib";
+    } else {
+        const std::size_t slash = config.device.path.find_last_of('/');
+        if (slash != std::string::npos &&
+            slash + 1 < config.device.path.size()) {
+            name += "-" + config.device.path.substr(slash + 1);
+        }
     }
 
     image_path = "build/" + name + ".img";
     config.image_path = image_path;
     last_export_ = config;
+    last_export_geometry_ = geometry;
     has_export_ = true;
     error.clear();
     return true;

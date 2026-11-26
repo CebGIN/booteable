@@ -239,7 +239,8 @@ bool PrepController::export_image(const PrepConfig& config, std::string& error) 
 
 bool PrepController::export_default_image(PrepConfig& config,
                                           std::string& image_path,
-                                          std::string& error) {
+                                          std::string& error,
+                                          ExportGeometry geometry) {
     std::error_code code;
     const std::filesystem::path directory = "build";
     std::filesystem::create_directories(directory, code);
@@ -248,15 +249,33 @@ bool PrepController::export_default_image(PrepConfig& config,
         return false;
     }
 
+    // La exportación estándar no depende de ninguna USB: usa la geometría del
+    // ejemplo de 64 MiB/512 que también emplean la CLI y la demo. La exportación
+    // seleccionada conserva tamaño, sector y etiqueta del destino elegido.
+    PrepConfig target = config;
     std::string name = "booteable-export";
-    const std::size_t slash = config.device.path.find_last_of('/');
-    if (slash != std::string::npos && slash + 1 < config.device.path.size()) {
-        name += "-" + config.device.path.substr(slash + 1);
+    if (geometry == ExportGeometry::Standard) {
+        target.device.path = "(estandar)";
+        target.device.size_bytes = 64ull * kMib;
+        target.device.logical_sector = 512;
+        target.esp_bytes = 0;
+        target.overwrite_confirmed = true;
+        name += "-64mib";
+    } else {
+        const std::size_t slash = config.device.path.find_last_of('/');
+        if (slash != std::string::npos &&
+            slash + 1 < config.device.path.size()) {
+            name += "-" + config.device.path.substr(slash + 1);
+        }
     }
 
     image_path = (directory / (name + ".img")).string();
+    target.image_path = image_path;
+    if (!export_image(target, error)) {
+        return false;
+    }
     config.image_path = image_path;
-    return export_image(config, error);
+    return true;
 }
 
 } // namespace booteable

@@ -59,6 +59,12 @@ enum class PrepOutcome {
 
 enum class SafetyVerdict { Allowed, AllowedWithWarning, Rejected };
 
+// Geometría con la que se exporta una imagen de arranque. `Standard` produce
+// una imagen de 64 MiB y sector 512 independiente de cualquier USB; `Selected`
+// replica el tamaño y el sector del dispositivo elegido para poder flashearla
+// 1:1.
+enum class ExportGeometry { Standard, Selected };
+
 struct DevicePartition {
     std::string name;          // sdb1
     std::string mount_point;   // vacío si no está montada
