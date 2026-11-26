@@ -46,6 +46,7 @@ void bind_rail_scene(NodeRef<PanelContainer> root, RailSceneWidgets& widgets,
     widgets.panel = root;
     NodeRef<VBox> layout = root->get_node<VBox>("rail_layout");
 
+    widgets.toggle = layout->get_node<Button>("rail_toggle");
     widgets.title = layout->get_node<Label>("rail_title");
     widgets.export_button = layout->get_node<Button>("rail_export");
     widgets.refresh = layout->get_node<Button>("rail_refresh");
@@ -56,6 +57,7 @@ void bind_rail_scene(NodeRef<PanelContainer> root, RailSceneWidgets& widgets,
     widgets.export_selected = layout->get_node<Button>("rail_export_selected");
     widgets.export_back = layout->get_node<Button>("rail_export_back");
 
+    widgets.toggle->connect_signal("clicked", [&app] { app.toggle_rail(); });
     widgets.export_button->connect_signal("clicked",
                                           [&app] { app.open_export_page(); });
     widgets.refresh->connect_signal("clicked",
@@ -74,7 +76,13 @@ void bind_rail_scene(NodeRef<PanelContainer> root, RailSceneWidgets& widgets,
 
 void refresh_rail_scene(RailSceneWidgets& widgets, const RailSceneState& state) {
     const bool expanded = state.expanded;
-    widgets.title->set_text(expanded ? "HERRAMIENTAS" : "");
+    widgets.toggle->set_text(expanded ? "[<]" : "[>]");
+    const bool tools = state.mode == RailMode::MainTools ||
+                       state.mode == RailMode::ExportPage;
+    widgets.title->set_text(expanded ? (state.mode == RailMode::ExportPage
+                                            ? "EXPORTAR"
+                                            : (tools ? "HERRAMIENTAS" : "SESIÓN"))
+                                     : "");
     widgets.title->set_visible(expanded);
 
     const Labels labels = labels_for(state.mode, expanded);

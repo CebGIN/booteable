@@ -262,6 +262,11 @@ void AppScene::handle_key(Key key) {
 }
 
 void AppScene::animate(double delta_time) {
+    // El layout ya corrió antes de on_process. Reaplicar las etiquetas del rail
+    // hace que Button reajuste el wrap al ancho real del slot tras plegar o
+    // desplegar; sin esto el texto queda partido en varias líneas.
+    refresh_rail();
+
     if (transition_.active) {
         transition_.elapsed += std::max(0.0, delta_time);
         const double ratio =

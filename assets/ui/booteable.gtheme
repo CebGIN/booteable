@@ -13,6 +13,13 @@ style "panel" {
     margin = [1, 0, 1, 0]
 }
 
+# Fondo único de la aplicación. Sin márgenes ni borde, para que cubra también
+# la fila del título, la del estado y los huecos entre paneles.
+style "background" {
+    background = "BLACK"
+    margin = [0, 0, 0, 0]
+}
+
 # Rail de herramientas. El fondo distinto separa las acciones del programa de
 # la selección de la USB; no lleva borde para no robar columnas.
 style "rail" {
@@ -33,26 +40,28 @@ style "spinner" {
     margin = [0, 0, 0, 0]
 }
 
+# Un margen superior de una fila centra el texto de una línea en los botones
+# de tres filas del rail.
 style "button.rail.normal" {
     border_style = "none"
-    margin = [0, 0, 0, 0]
+    margin = [0, 1, 0, 0]
 }
 
 style "button.rail.hover" {
     background = "BLUE"
     border_style = "none"
-    margin = [0, 0, 0, 0]
+    margin = [0, 1, 0, 0]
 }
 
 style "button.rail.pressed" {
     background = "BRIGHT_BLUE"
     border_style = "none"
-    margin = [0, 0, 0, 0]
+    margin = [0, 1, 0, 0]
 }
 
 style "button.rail.disabled" {
     border_style = "none"
-    margin = [0, 0, 0, 0]
+    margin = [0, 1, 0, 0]
 }
 
 style "button.primary.normal" {

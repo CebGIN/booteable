@@ -11,6 +11,7 @@ class AppScene;
 
 struct RailSceneWidgets {
     guayaba::NodeRef<guayaba::PanelContainer> panel;
+    guayaba::NodeRef<guayaba::Button> toggle;
     guayaba::NodeRef<guayaba::Label> title;
     guayaba::NodeRef<guayaba::Button> export_button;
     guayaba::NodeRef<guayaba::Button> refresh;
