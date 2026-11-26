@@ -155,6 +155,11 @@ LayoutResult compute_layout(const BootImageSpec& spec) {
         return result;
     }
 
+    if (esp_first_lba > last_usable) {
+        fail(result, "La imagen es demasiado pequeña para la ESP.");
+        return result;
+    }
+
     // Si la ESP automática no entra en un disco pequeño, se reduce al mayor
     // tamaño que quepa (siempre por encima del mínimo FAT32). Una ESP pedida
     // explícitamente que no entra es un error de configuración.

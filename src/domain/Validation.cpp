@@ -74,6 +74,7 @@ ValidationReport validate_config(const PrepConfig& config) {
                   "La capacidad no es múltiplo del sector lógico.");
     }
 
+    const bool automatic_esp = config.esp_bytes == 0;
     const std::uint64_t esp_bytes = effective_esp_bytes(config);
     const std::uint64_t minimum = min_esp_bytes(device.logical_sector);
     if (esp_bytes < minimum) {
@@ -145,9 +146,23 @@ ValidationReport validate_config(const PrepConfig& config) {
             if (esp_first_lba < first_usable) {
                 add_issue(report, "esp_first_lba",
                           "La ESP no puede empezar antes de la GPT primaria.");
+            } else if (esp_first_lba > last_usable) {
+                add_issue(report, "device.size_bytes",
+                          "El dispositivo es demasiado pequeño para la ESP.");
             } else if (esp_first_lba + esp_sectors - 1 > last_usable) {
-                add_issue(report, "esp_bytes",
-                          "La ESP no entra antes de la GPT de respaldo.");
+                // Igual que ImageLayout: una ESP automática se reduce al mayor
+                // tamaño que quepa; una ESP explícita que no entra es error.
+                if (!automatic_esp) {
+                    add_issue(report, "esp_bytes",
+                              "La ESP no entra antes de la GPT de respaldo.");
+                } else {
+                    const std::uint64_t maximum_sectors =
+                        last_usable - esp_first_lba + 1;
+                    if (maximum_sectors * sector < minimum) {
+                        add_issue(report, "esp_bytes",
+                                  "La imagen no tiene espacio para una ESP mínima.");
+                    }
+                }
             }
         }
     }

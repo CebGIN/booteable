@@ -95,6 +95,31 @@ void run_validation_tests() {
     }
 
     {
+        // La ESP automática se reduce para entrar en un destino de 64 MiB.
+        const PrepConfig config = make_config(512, 64ull * 1024ull * 1024ull);
+        CHECK(booteable::validate_config(config).ok());
+        CHECK(booteable::validate(config, 64ull * 1024ull).ok());
+    }
+
+    {
+        // Un destino de 1 MiB no llega ni al LBA de inicio de la ESP.
+        const PrepConfig config = make_config(512, 1ull * 1024ull * 1024ull);
+        const ValidationReport report = booteable::validate_config(config);
+        CHECK(!report.ok());
+        CHECK(has_issue(report, "device.size_bytes") ||
+              has_issue(report, "esp_bytes"));
+    }
+
+    {
+        // La misma ESP pedida explícitamente no entra y debe fallar.
+        PrepConfig config = make_config(512, 64ull * 1024ull * 1024ull);
+        config.esp_bytes = 64ull * 1024ull * 1024ull;
+        const ValidationReport report = booteable::validate_config(config);
+        CHECK(!report.ok());
+        CHECK(has_issue(report, "esp_bytes"));
+    }
+
+    {
         PrepConfig config = make_config();
         config.volume_label = "booteable";
         CHECK(!booteable::validate_config(config).ok());

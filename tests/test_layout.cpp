@@ -115,6 +115,13 @@ void run_layout_tests() {
     }
 
     {
+        // Un disco de 1 MiB ni siquiera llega al LBA donde empieza la ESP.
+        const LayoutResult result = compute_layout(make_spec(1, 512, 0));
+        CHECK(!result.ok);
+        CHECK(!result.error.empty());
+    }
+
+    {
         booteable::BootImageSpec spec = make_spec(128, 512, 0);
         spec.logical_sector = 2048;
         CHECK(!compute_layout(spec).ok);
