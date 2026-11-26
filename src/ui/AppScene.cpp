@@ -26,7 +26,7 @@ using guayaba::SplitContainer;
 using guayaba::SplitOrientation;
 using guayaba::Vec2;
 
-constexpr int kRailCollapsed = 4;
+constexpr int kRailCollapsed = 5;
 constexpr int kRailExpanded = 18;
 constexpr double kTransitionSeconds = 0.18;
 constexpr double kPartitionScreenSeconds = 0.6;

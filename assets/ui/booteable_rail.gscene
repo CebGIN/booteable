@@ -35,6 +35,7 @@ PanelContainer "rail" {
             anchor_right = 1.0
             grow_x = "both"
             clip_children = true
+            style = "rail_title"
             text_color = "BRIGHT_CYAN"
         }
 

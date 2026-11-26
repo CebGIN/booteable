@@ -27,6 +27,10 @@ style "rail" {
     margin = [0, 0, 0, 0]
 }
 
+style "rail_title" {
+    margin = [1, 0, 0, 0]
+}
+
 style "step_panel" {
     background = "BLACK"
     border = "BRIGHT_CYAN"
@@ -40,28 +44,29 @@ style "spinner" {
     margin = [0, 0, 0, 0]
 }
 
-# Un margen superior de una fila centra el texto de una línea en los botones
-# de tres filas del rail.
+# El margen superior centra el texto en los botones de tres filas; el margen
+# izquierdo alinea las etiquetas desplegadas y deja una celda libre a cada lado
+# cuando el rail está plegado.
 style "button.rail.normal" {
     border_style = "none"
-    margin = [0, 1, 0, 0]
+    margin = [1, 1, 0, 0]
 }
 
 style "button.rail.hover" {
     background = "BLUE"
     border_style = "none"
-    margin = [0, 1, 0, 0]
+    margin = [1, 1, 0, 0]
 }
 
 style "button.rail.pressed" {
     background = "BRIGHT_BLUE"
     border_style = "none"
-    margin = [0, 1, 0, 0]
+    margin = [1, 1, 0, 0]
 }
 
 style "button.rail.disabled" {
     border_style = "none"
-    margin = [0, 1, 0, 0]
+    margin = [1, 1, 0, 0]
 }
 
 style "button.primary.normal" {

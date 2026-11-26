@@ -24,6 +24,46 @@ using guayaba::Key;
 using guayaba::Rect;
 using guayaba::Vec2;
 
+// Terminal de prueba: presenta el buffer a memoria para inspeccionar qué celdas
+// quedaron sin cubrir. El renderer limpia el buffer en BRIGHT_WHITE, así que un
+// fondo blanco residual delata un hueco de layout.
+class CapturingTerminal : public guayaba::IOSTerminal {
+public:
+    std::vector<guayaba::TermChar> buffer;
+    Vec2 size{0, 0};
+
+    void init() override {}
+    void restore() override {}
+    void set_cursor_visible(bool) override {}
+    void set_cursor_position(Vec2) override {}
+    void present_buffer(const std::vector<guayaba::TermChar>& presented,
+                        Vec2 presented_size) override {
+        buffer = presented;
+        size = presented_size;
+    }
+    Vec2 get_screen_size(Vec2 fallback) const override { return fallback; }
+    void poll_events() override {}
+    Vec2 get_mouse_position() const override { return {0, 0}; }
+    bool is_left_click_pressed() const override { return false; }
+    bool is_right_click_pressed() const override { return false; }
+    bool is_left_click_just_pressed() const override { return false; }
+    bool is_right_click_just_pressed() const override { return false; }
+    std::vector<guayaba::InputEvent> take_input_events() override { return {}; }
+    bool was_key_pressed(Key) const override { return false; }
+    int get_wheel_delta() const override { return 0; }
+    std::string get_line_input(Vec2) override { return {}; }
+
+    bool has_white_cell() const {
+        for (const guayaba::TermChar& cell : buffer) {
+            if (cell.background ==
+                guayaba::Color::from_name(guayaba::Color::BRIGHT_WHITE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
 std::unique_ptr<guayaba::Node> layout(AppScene& app, int width, int height) {
     auto root = app.build();
     root->update_layout(Rect::from_size(Vec2{width, height}));
@@ -84,7 +124,7 @@ void test_narrow_layout() {
     auto root = layout(app, 80, 24);
     CHECK(root != nullptr);
 
-    CHECK_EQ(app.rail_slot()->get_custom_minimum_size().x, 4);
+    CHECK_EQ(app.rail_slot()->get_custom_minimum_size().x, 5);
     CHECK(app.split()->get_orientation() ==
           guayaba::SplitOrientation::HorizontalDivider);
     const Rect devices = app.devices_panel()->get_rect();
@@ -379,8 +419,8 @@ void test_rail_toggle_updates_stage_width() {
     auto root = layout(app, 80, 24);
     CHECK(root != nullptr);
 
-    CHECK_EQ(app.rail_slot()->get_rect().size.x, 4);
-    CHECK_EQ(app.stage()->get_rect().size.x, 76);
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 5);
+    CHECK_EQ(app.stage()->get_rect().size.x, 75);
 
     app.handle_key(Key::F9);
     root->update_layout(Rect::from_size(Vec2{80, 24}));
@@ -391,8 +431,8 @@ void test_rail_toggle_updates_stage_width() {
 
     app.handle_key(Key::F9);
     root->update_layout(Rect::from_size(Vec2{80, 24}));
-    CHECK_EQ(app.rail_slot()->get_rect().size.x, 4);
-    CHECK_EQ(app.stage()->get_rect().size.x, 76);
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 5);
+    CHECK_EQ(app.stage()->get_rect().size.x, 75);
 }
 
 void test_expanded_rail_keeps_screens_inside() {
@@ -498,6 +538,35 @@ void test_f10_notice_survives_tick() {
     CHECK(app.step_status()->get_text().find("cancelá") != std::string::npos);
 }
 
+void test_no_white_background_leaks() {
+    FakePrepController controller;
+    AppScene app(controller);
+    auto root = app.build();
+    root->update_layout(Rect::from_size(Vec2{120, 40}));
+    app.settle_transition();
+
+    guayaba::SceneManager& manager = guayaba::SceneManager::get_instance();
+    manager.change_scene(std::move(root));
+    CapturingTerminal terminal;
+    guayaba::ConsoleRenderer renderer(Vec2{120, 40}, &terminal);
+
+    manager.run_frame(renderer, {});
+    CHECK_EQ(terminal.buffer.size(), std::size_t{120 * 40});
+    CHECK(!terminal.has_white_cell());
+
+    // La pantalla de progreso es la que más huecos deja entre paneles, labels y
+    // márgenes; el fondo único debe cubrirla igual.
+    app.handle_key(Key::ENTER);
+    app.set_confirmed(true);
+    app.handle_key(Key::ENTER);
+    app.settle_transition();
+    manager.run_frame(renderer, {});
+    CHECK(!terminal.has_white_cell());
+
+    manager.take_scene();
+    guayaba::FocusManager::get_instance().clear();
+}
+
 void test_modal_blocks_list_clicks() {
     FakePrepController controller;
     AppScene app(controller);
@@ -555,5 +624,6 @@ void run_ui_flow_tests() {
     test_building_failure_marks_image_phase();
     test_transition_settles_without_overlap();
     test_f10_notice_survives_tick();
+    test_no_white_background_leaks();
     test_modal_blocks_list_clicks();
 }

@@ -8,8 +8,12 @@ format = 1
 name = "BooteableShell"
 theme = "booteable.gtheme"
 
-Control "content" {
+# El root es el único panel de fondo: pinta toda la pantalla de negro para que
+# no se filtren las celdas sin cubrir del buffer (que arranca en blanco). Las
+# pantallas se apilan encima y no necesitan repetir el fondo.
+PanelContainer "content" {
     anchors = "full_rect"
+    style = "background"
     clip_children = true
 
     HBox "app_frame" {
@@ -20,7 +24,7 @@ Control "content" {
         # el rail lo llena con anchors = "full_rect".
         Control "rail_slot" {
             anchors = "full_rect"
-            custom_minimum_size = [4, 0]
+            custom_minimum_size = [5, 0]
             grow_x = "none"
             grow_y = "both"
             clip_children = true

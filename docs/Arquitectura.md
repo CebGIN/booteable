@@ -805,10 +805,11 @@ inconsistente. El único paso interactivo es el 1.
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-El rail es la única acción global: se pliega a 4 columnas (`[E]`, `[A]`, `[S]`)
-y se despliega a 18 (`[ Exportar ]`, `[ Actualizar ]`, `[ Salir ]`). `F9` lo
-pliega; `F8` abre la página de exportación. El contenido ocupa el resto del
-ancho y `AdaptiveScreen` decide el layout con `ancho_terminal - ancho_rail`.
+El rail es la única acción global: se pliega a 5 columnas (`[E]`, `[A]`, `[S]`
+con una celda libre a cada lado) y se despliega a 18 (`[ Exportar ]`,
+`[ Actualizar ]`, `[ Salir ]` alineados a la izquierda). El botón `[>]` / `[<]`
+o `F9` lo pliega; `F8` abre la página de exportación. El contenido ocupa el resto
+del ancho y `AdaptiveScreen` decide el layout con `ancho_terminal - ancho_rail`.
 
 Página de exportación del rail:
 

@@ -11,6 +11,7 @@ using guayaba::Button;
 using guayaba::Label;
 using guayaba::NodeRef;
 using guayaba::PanelContainer;
+using guayaba::TextAlign;
 using guayaba::VBox;
 
 struct Labels {
@@ -79,11 +80,24 @@ void refresh_rail_scene(RailSceneWidgets& widgets, const RailSceneState& state) 
     widgets.toggle->set_text(expanded ? "[<]" : "[>]");
     const bool tools = state.mode == RailMode::MainTools ||
                        state.mode == RailMode::ExportPage;
-    widgets.title->set_text(expanded ? (state.mode == RailMode::ExportPage
-                                            ? "EXPORTAR"
-                                            : (tools ? "HERRAMIENTAS" : "SESIÓN"))
-                                     : "");
+    widgets.title->set_text(
+        expanded ? (state.mode == RailMode::ExportPage
+                        ? "EXPORTAR"
+                        : (tools ? "HERRAMIENTAS" : "SESIÓN"))
+                 : "");
     widgets.title->set_visible(expanded);
+
+    // Desplegado, las etiquetas se alinean a la izquierda; plegado, se centran
+    // en la celda de cinco columnas.
+    const TextAlign align = expanded ? TextAlign::Left : TextAlign::Center;
+    widgets.export_button->set_text_align(align);
+    widgets.refresh->set_text_align(align);
+    widgets.back->set_text_align(align);
+    widgets.cancel->set_text_align(align);
+    widgets.exit->set_text_align(align);
+    widgets.export_64->set_text_align(align);
+    widgets.export_selected->set_text_align(align);
+    widgets.export_back->set_text_align(align);
 
     const Labels labels = labels_for(state.mode, expanded);
     widgets.export_button->set_text(labels.export_button);
