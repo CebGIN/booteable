@@ -14,6 +14,7 @@ void run_sysfs_source_tests();
 void run_mount_manager_tests();
 void run_device_writer_tests();
 void run_flash_tests();
+void run_prep_controller_tests();
 void run_ui_flow_tests();
 
 namespace booteable::test {
@@ -38,6 +39,7 @@ int main() {
     run_mount_manager_tests();
     run_device_writer_tests();
     run_flash_tests();
+    run_prep_controller_tests();
     run_ui_flow_tests();
 
     if (booteable::test::failures != 0) {

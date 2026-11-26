@@ -120,6 +120,8 @@ add_library(booteable_core STATIC
     src/device/FaultyDeviceWriter.cpp
     src/device/DeviceFlasher.cpp
     src/app/FakePrepController.cpp
+    src/app/PrepController.cpp
+    src/app/PrepRunner.cpp
     "${EMBEDDED_CPP}")
 add_dependencies(booteable_core booteable_embedded)
 target_include_directories(booteable_core PUBLIC
@@ -149,7 +151,7 @@ booteable_warnings(booteable)
 add_executable(booteable-image src/cli/main.cpp)
 target_link_libraries(booteable-image PRIVATE booteable_core)
 target_compile_definitions(booteable-image PRIVATE
-    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp3")
+    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp4")
 booteable_warnings(booteable-image)
 
 # --- Pruebas ---------------------------------------------------------------------
@@ -169,6 +171,7 @@ add_executable(booteable_tests
     tests/test_mount_manager.cpp
     tests/test_device_writer.cpp
     tests/test_flash.cpp
+    tests/test_prep_controller.cpp
     tests/test_ui_flow.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core booteable_ui)

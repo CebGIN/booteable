@@ -116,7 +116,10 @@ void AppScene::handle_key(Key key) {
     case Key::F10:
         if (state_.screen == UiScreen::Progress) {
             state_.status = "Hay una preparación en curso; cancelá con Esc.";
-            refresh_main();
+            if (progress_.status) {
+                progress_.status->set_text(state_.status);
+                progress_.status->set_text_color("BRIGHT_YELLOW");
+            }
             return;
         }
         quit();
@@ -178,18 +181,21 @@ void AppScene::tick() {
         return;
     }
 
-    state_.progress = controller_.progress();
-    refresh_progress();
-
     if (controller_.running()) {
+        state_.progress = controller_.progress();
+        refresh_progress();
         return;
     }
 
+    // El hilo terminó: se releen progreso y resultado juntos para no mostrar un
+    // porcentaje anterior a la publicación final.
     state_.result = controller_.result();
+    state_.progress = controller_.progress();
     if (state_.result.outcome == PrepOutcome::None) {
         state_.result.outcome = PrepOutcome::Cancelled;
         state_.result.message = "La preparación terminó sin un resultado explícito.";
     }
+    refresh_progress();
     show(UiScreen::Result);
     refresh_result();
 }
@@ -403,8 +409,8 @@ void AppScene::show(UiScreen screen) {
         result_.panel->set_visible(screen == UiScreen::Result);
     }
 
-    if (screen == UiScreen::Main) {
-        state_.status = state_.status;
+    if (screen == UiScreen::Result) {
+        refresh_result();
     }
     focus_current_screen();
 }

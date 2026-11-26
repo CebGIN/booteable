@@ -2,11 +2,16 @@
 
 #include <guayaba/Guayaba.hpp>
 
-#include "app/FakePrepController.hpp"
+#include "app/PrepController.hpp"
+#include "app/PrepRunner.hpp"
+#include "device/SysfsBlockDeviceSource.hpp"
 #include "ui/AppScene.hpp"
 
 int main() {
-    booteable::FakePrepController controller;
+    booteable::SysfsBlockDeviceSource source;
+    booteable::PrepRunner runner(source);
+    booteable::PrepController controller(source, runner);
+
     booteable::ui::AppScene app(controller);
     auto scene = app.build();
 

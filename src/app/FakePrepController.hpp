@@ -49,7 +49,7 @@ private:
     std::string fail_message_;
     bool manual_steps_ = false;
     bool can_write_ = true;
-    std::string write_block_reason_; 
+    std::string write_block_reason_;
 };
 
 } // namespace booteable

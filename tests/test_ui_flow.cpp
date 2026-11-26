@@ -132,6 +132,15 @@ void test_fake_flow_cancel_during_write() {
     CHECK(app.state().screen == UiScreen::Confirm);
     CHECK(!app.warning_checkbox()->is_checked());
 
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    const auto confirm_panel =
+        root->get_node<guayaba::PanelContainer>("screen/confirm");
+    CHECK(confirm_panel->get_rect().right() <= 80);
+    CHECK(confirm_panel->get_rect().bottom() <= 24);
+    const auto overwrite = confirm_panel->get_node<guayaba::Button>(
+        "confirm_layout/confirm_buttons/confirm_overwrite");
+    CHECK(confirm_panel->get_rect().contains(overwrite->get_rect()));
+
     // Sin la casilla, Enter no abre el dispositivo ni inicia el flujo.
     app.handle_key(Key::ENTER);
     CHECK(app.state().screen == UiScreen::Confirm);
@@ -148,12 +157,30 @@ void test_fake_flow_cancel_during_write() {
     CHECK_EQ(app.state().progress.stage, PrepStage::Writing);
     CHECK_EQ(app.progress_bar()->get_value(), 55.0);
 
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    const auto progress_panel =
+        root->get_node<guayaba::PanelContainer>("screen/progress");
+    CHECK(progress_panel->get_rect().right() <= 80);
+    CHECK(progress_panel->get_rect().bottom() <= 24);
+    const auto cancel = progress_panel->get_node<guayaba::Button>(
+        "progress_layout/progress_cancel");
+    CHECK(progress_panel->get_rect().contains(cancel->get_rect()));
+
     app.handle_key(Key::ESCAPE);
     CHECK(app.state().screen == UiScreen::Result);
     CHECK(app.state().result.outcome == PrepOutcome::Incomplete);
     CHECK_EQ(booteable::ui::outcome_color(app.state().result.outcome),
              std::string("BRIGHT_YELLOW"));
     CHECK_EQ(app.result_outcome()->get_text(), std::string("INCOMPLETO"));
+
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    const auto result_panel =
+        root->get_node<guayaba::PanelContainer>("screen/result");
+    CHECK(result_panel->get_rect().right() <= 80);
+    CHECK(result_panel->get_rect().bottom() <= 24);
+    const auto back = result_panel->get_node<guayaba::Button>(
+        "result_layout/result_buttons/result_back");
+    CHECK(result_panel->get_rect().contains(back->get_rect()));
 
     app.handle_key(Key::ESCAPE);
     CHECK(app.state().screen == UiScreen::Main);
