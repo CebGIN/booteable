@@ -768,83 +768,123 @@ coinciden con el dispositivo; si no, rechaza y sugiere `--sector-size`/`--size-m
 
 ### 12.1 Escenas
 
-La estructura estática de los cuatro paneles y el tema viven en
-`assets/ui/booteable.gscene` y `assets/ui/booteable.gtheme`. `AppScene` los carga
-incrustados en el binario (`tools/embed-ui.py`), usa `AdaptiveScreen` como host
-responsive y resuelve los widgets por ruta. Los textos dinámicos, las señales y
-el refresco con `IPrepController` siguen en C++.
+El formato `.gscene` admite un solo nodo raíz por archivo y no tiene `include`
+ni composición declarativa. Por eso la estructura se reparte en seis escenas:
 
-`MainScene` (selección y configuración):
+| Archivo | Root | Se injerta en |
+|---|---|---|
+| `booteable.gscene` | `content` (shell) | raíz de `AdaptiveScreen` |
+| `booteable_rail.gscene` | `rail` | `app_frame/rail_slot` |
+| `booteable_main.gscene` | `main` | `app_frame/shell/stage_slot` |
+| `booteable_steps.gscene` | `steps` | `app_frame/shell/stage_slot` |
+| `booteable_confirm.gscene` | `confirm` | `app_frame/shell/stage_slot` |
+| `booteable_result.gscene` | `result` | `app_frame/shell/stage_slot` |
+
+`tools/embed-ui.py` incrusta todas las escenas y un único
+`assets/ui/booteable.gtheme`. `AppScene` construye el tema una vez, construye
+cada root con ese tema y los injerta bajo los slots. Los textos dinámicos, las
+señales, las transiciones y el refresco con `IPrepController` siguen en C++.
+
+El wizard tiene seis pasos: **Detectar → Particionar → Formatear → Escribir →
+Sincronizar → Verificar**. No hay “Siguiente” entre los pasos 2 y 6: la
+preparación es una sola operación atómica y pausarla dejaría el medio
+inconsistente. El único paso interactivo es el 1.
+
+`MainScene` (paso 1, rail plegado):
 
 ```text
-┌ booteable · Preparador UEFI ────────────────────────────────────────────────┐
-│ [F5] Actualizar   [Tab] Cambiar panel        USB detectadas: 2              │
-├───────────────────────────────┬─────────────────────────────────────────────┤
-│ Dispositivo        Capacidad  │ /dev/sdb · USB Flash Disk                   │
-│ ▸ /dev/sdb          29.8 GiB  │ Serie: 0123456789ABCDEF                     │
-│   /dev/sdc           7.5 GiB  │ by-id: usb-Generic_Flash_Disk_012345-0:0    │
-│                               │ Montajes: /media/user/USB (sdb1)            │
-│                               │                                             │
-│                               │ Seguridad: ✓ Apto                          │
-│                               │ • USB extraíble, identidad verificada       │
-│                               │                                             │
-│                               │ Imagen: GPT · ESP FAT32 · 64 MiB            │
-│                               │ Etiqueta: BOOTEABLE                         │
-│                               │ Programa: BOOTX64.EFI (sha256 3f9a…)        │
-│                               │                                             │
-│                               │ [ Preparar USB ]  [ Exportar imagen ]       │
-├───────────────────────────────┴─────────────────────────────────────────────┤
-│ F5 actualizar · Enter preparar · F8 exportar · F10 salir                    │
+┌─┬ booteable | Preparador UEFI ─────────────────────────────────────────────┐
+│E│ USB detectadas: 2                    │ /dev/sdb · USB Flash Disk          │
+│A│ ▸ /dev/sdb  16.0 GiB  [USB]          │ Serie: 0001                        │
+│S│   /dev/sdc   2.0 GiB  [USB]          │ Montajes: /media/usb (sdb1)        │
+│ │                                      │ Seguridad: APTO                    │
+│ │                                      │ Imagen: GPT · ESP 64 MiB           │
+│ │                                      │ [ Preparar /dev/sdb ]              │
+├─┴──────────────────────────────────────┴────────────────────────────────────┤
+│ E exportar · A actualizar · S salir · F9 desplegar                          │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`ConfirmDialog` (superpuesto): resumen, advertencia en rojo, `CheckBox`
-*"Entiendo que se perderá todo el contenido de /dev/sdX"*, y botones
-`Cancelar` / `Sobrescribir`. Con `Tab` se marca la casilla; `Enter` confirma.
+El rail es la única acción global: se pliega a 4 columnas (`[E]`, `[A]`, `[S]`)
+y se despliega a 18 (`[ Exportar ]`, `[ Actualizar ]`, `[ Salir ]`). `F9` lo
+pliega; `F8` abre la página de exportación. El contenido ocupa el resto del
+ancho y `AdaptiveScreen` decide el layout con `ancho_terminal - ancho_rail`.
 
-`ProgressScene`:
+Página de exportación del rail:
 
 ```text
-┌ Preparando /dev/sdb ────────────────────────────────────────────────────────┐
-│ Imagen construida · SHA-256 3f9a…                                           │
-│                                                                             │
-│  [✓] Construir imagen                                                       │
-│  [✓] Abrir dispositivo                                                      │
-│  [✓] Desmontar /media/user/USB                                              │
-│  [>] Escribiendo         ████████████████░░░░░░░░  58 %   17.3 / 29.8 GiB   │
-│  [ ] Sincronizar                                                            │
-│  [ ] Verificar                                                              │
-│                                                                             │
-│ [ Cancelar ]                                                                │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────┬ booteable | Preparador UEFI ────────────────────────────┐
+│ HERRAMIENTAS     │ USB detectadas: 2        │ /dev/sdb · USB Flash Disk      │
+│ [ Exportar     ] │ ▸ /dev/sdb  16.0 GiB     │ Serie: 0001                    │
+│   [ 64 MiB ]     │   /dev/sdc   2.0 GiB     │ Seguridad: APTO                │
+│   [ /dev/sdb ]   │                          │ Imagen: GPT · ESP 64 MiB       │
+│ [ Actualizar   ] │                          │ [ Preparar /dev/sdb ]          │
+│ [ Salir        ] │                          │                                │
+└──────────────────┴──────────────────────────┴────────────────────────────────┘
 ```
+
+`[ 64 MiB ]` exporta una imagen estándar de 64 MiB/512 independiente de la USB.
+`[ /dev/sdb ]` replica tamaño, sector y etiqueta del dispositivo elegido; queda
+deshabilitado si no hay selección. La exportación no modifica la USB.
+
+`ConfirmScene` es una pantalla completa, no un overlay: resumen del destino,
+plan de imagen, advertencia en rojo, `CheckBox`
+*"Entiendo que se perderá todo el contenido de /dev/sdX"* y botones
+`[ Volver ]` / `[ Sobrescribir y preparar ]`. Trabaja sobre una instantánea del
+dispositivo, que se revalida antes de escribir.
+
+`StepScene` usa dos ranuras (`step_a`, `step_b`) para que el cambio de paso no
+tenga un hueco:
+
+```text
+┌─┬ PASO 3 DE 6 ─────────────────────────────────────────────────────────────┐
+│X│ Formatear                                                              │
+│S│ FASE 1 · CONSTRUIR IMAGEN · la USB todavía no se modifica              │
+│ │ Crear la ESP FAT32 y copiar EFI/BOOT/BOOTX64.EFI al árbol 8.3.         │
+│ │ [|] Generando FAT32…                                                   │
+│ │ ████████████████░░░░░░░░  42 %                                         │
+│ │ [##>---]                                                               │
+│ │ Validando destino e imagen                                             │
+│ │ Construyendo la imagen…                                                │
+│ │ [ Esc · Cancelar ]                                                     │
+└─┴────────────────────────────────────────────────────────────────────────┘
+```
+
+Los pasos 2 (Particionar) y 3 (Formatear) no tienen señal propia en el
+controlador: `Building` cubre ambos. La UI los separa con un temporizador de
+~600 ms, pero cualquier etapa real (`Writing`, `Syncing`, `Verifying`) pisa el
+temporizador de inmediato y un paso nunca se marca como hecho antes de que
+`Building` termine. Si el build es más rápido que el umbral, Formatear se salta.
 
 `ResultScene`: resultado (`VERIFICADO` en verde, `INCOMPLETO` en ámbar,
-`FALLÓ` en rojo), etapa, mensaje, SHA-256 de imagen y dispositivo, y las
-instrucciones de prueba:
-
-```text
-Prueba virtual:  ./tools/run-qemu.sh build/booteable.img --headless
-Prueba física:   reiniciar, abrir el menú de arranque y elegir la USB
-Secure Boot:     debe estar desactivado en el equipo de prueba
-```
+`FALLÓ` en rojo), paso y etapa, mensaje, SHA-256 de imagen y dispositivo, y las
+instrucciones de prueba. Si falla `Building`, el resultado informa
+“Preparar imagen (Particionar / Formatear)”, sin inventar cuál de los dos falló.
 
 ### 12.2 Reglas de UI
 
 - La UI solo incluye `app/IPrepController.hpp` y `src/domain/Types.hpp`.
-- La estructura y el tema son declarativos (`assets/ui/booteable.gscene` y
+- La estructura y el tema son declarativos (`assets/ui/*.gscene` y
   `booteable.gtheme`); el comportamiento y los bindings de señales quedan en
-  `src/ui/`.
+  `src/ui/`. La composición de escenas se hace en C++, no en el formato.
 - `MainScene` refresca con `F5` y al recibir el evento de cambio de dispositivo;
   no usa sondeo continuo en el panel de selección.
-- Durante la preparación, `ProgressScene` consulta `progress()` desde el
-  `on_process` de `AppScript` cada 100 ms; el hilo de escritura solo actualiza un
-  `std::atomic` y un mutex corto.
-- El diálogo de confirmación es modal: oculta el panel principal y trabaja sobre
-  una instantánea del dispositivo confirmado, que se revalida antes de escribir.
-- `Esc` cierra el diálogo; en `ProgressScene` `Esc` equivale a `Cancelar` y el
-  resultado incompleto se muestra en `ResultScene`.
-- A 80×24 los paneles se apilan; a 120×40 se usa el layout de dos columnas.
+- `AppScript` llama a `AppScene::animate(delta)` en cada frame para la
+  transición y el temporizador de pasos; consulta `progress()` cada 100 ms. El
+  hilo de escritura solo actualiza un `std::atomic` y un mutex corto.
+- La transición es un deslizamiento de ~180 ms sobre `anchor_left` /
+  `anchor_right`; al terminar queda un solo panel visible en el escenario.
+- La confirmación es una pantalla propia y usa la instantánea del dispositivo,
+  revalidada antes de escribir.
+- `Esc` vuelve de la confirmación y del resultado; en los pasos equivale a
+  `Cancelar`; en el paso 1 pliega el rail y después sale. `F10` sale salvo
+  durante la preparación.
+- Los pasos 2–3 son estimados por tiempo con guardas: la etapa real manda y no
+  se muestra “verificado” ni un paso completo antes de tiempo.
+- El rail guarda su estado plegado/desplegado entre pantallas. En los pasos 2–6
+  solo ofrece Cancelar; Salir queda deshabilitado.
+- A 80×24 los paneles se apilan; a 120×40 se usa el layout de dos columnas. El
+  breakpoint se calcula sobre el ancho del escenario, no sobre el terminal.
 - Los mensajes de error muestran la etapa y el `errno` traducido, nunca un
   "éxito" parcial.
 - No hay lógica de negocio en los nodos: los `LineEdit`/`Button` emiten señales
@@ -918,11 +958,11 @@ Criterios transversales:
 | RF-04 no destructivo | `boot/` | Sin protocolos de disco ni escrituras |
 | RF-05 enumeración | `SysfsBlockDeviceSource` | Lista con modelo, serie, tamaño, `by-id`, montajes |
 | RF-06 destino seguro | `SafetyPolicy` | P2 y `test_safety_policy` |
-| RF-07 confirmación | `ConfirmDialog` | P3 y captura de la UI |
+| RF-07 confirmación | `ConfirmScene` | P3 y captura de la UI |
 | RF-08 construcción propia | `image/` | `booteable-image build` sin herramientas externas |
 | RF-09 formato coherente | `GptWriter`, `Fat32Writer` | `test_gpt`, `test_fat32` |
 | RF-10 desmontaje | `MountManager` | `test_device_writer` con montaje falso |
-| RF-11 progreso | `PrepController`, `ProgressScene` | Etapas y porcentaje en vivo |
+| RF-11 progreso | `PrepController`, `StepScene` | Etapas y porcentaje en vivo |
 | RF-12 cancelación | `std::atomic_bool` + `PrepController` | `test_flash` y `test_prep_controller` |
 | RF-13 verificación | `DeviceWriter` + `ImageVerifier` | SHA-256 releído y CRC/FAT |
 | RF-14 errores | `PrepOutcome` + UI | Tabla §13 y P10 |
@@ -1018,8 +1058,8 @@ src/
                   PosixDeviceWriter · FileDeviceWriter · DeviceFlasher
   app/            IPrepController · PrepController · IPrepRunner · PrepRunner
                   FakePrepController
-  ui/             AppScene · MainScene · ConfirmDialog · ProgressScene
-                  ResultScene · UiFormat
+  ui/             AppScene · RailScene · MainScene · StepScene
+                  ConfirmScene · ResultScene · UiFormat · UiAssets
   cli/            main.cpp (build/verify/flash)
 tests/            TestHarness.hpp · test_*.cpp (una suite por argumento)
 tools/            build-efi.sh · run-qemu.sh · embed-efi.py · check-efi.py

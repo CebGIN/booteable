@@ -33,10 +33,10 @@ física P9 queda documentada y pendiente de ejecución en el laboratorio.
 - **WP3b** entrega el desmontaje controlado, el escritor POSIX, los fakes y el
   comando `flash`, que valida identidad y geometría, desmonta, abre con `O_EXCL`,
   escribe, sincroniza y relee el manifiesto por regiones.
-- **WP4a** entrega las escenas navegables de la TUI (`MainScene`, `ConfirmDialog`,
-  `ProgressScene`, `ResultScene`), el formato de tamaños/hashes/estados y el flujo
-  completo contra `FakePrepController`, con layout apilado a 80×24 y de dos
-  columnas a 120×40.
+- **WP4a** entrega las escenas navegables de la TUI (`RailScene`, `MainScene`,
+  `StepScene`, `ConfirmScene`, `ResultScene`), el formato de
+  tamaños/hashes/estados y el flujo completo contra `FakePrepController`, con
+  layout apilado a 80×24 y de dos columnas a 120×40.
 - **WP4b** entrega `PrepController`, con hilo de trabajo y cancelación, y
   `PrepRunner`, que construye la imagen, desmonta, escribe, sincroniza y verifica
   sobre datos reales. La TUI usa el controlador real desde `main`; sin `root` se
@@ -133,12 +133,14 @@ nuestro código. Por eso GPT y FAT32 se generan en `image/` y no se invocan
 sudo ./build/booteable   # TUI real; sin sudo enumera y exporta, pero no escribe
 ```
 
-La TUI enumera las USB, muestra identificador, capacidad, serie, puntos de montaje
-y la etiqueta/tamaño de la ESP, y exige la casilla de advertencia más `Enter`
-antes de escribir. Atajos: `F5` actualizar, flechas para elegir, `Enter`
-preparar, `F8` exportar la imagen, `F10` salir; en progreso `Esc` cancela. Sin
-privilegios se puede explorar y exportar una imagen, pero el botón de preparar
-queda deshabilitado con el mensaje de privilegios.
+La TUI recorre el wizard Detectar → Particionar → Formatear → Escribir →
+Sincronizar → Verificar. Enumera las USB, muestra identificador, capacidad,
+serie, puntos de montaje y la etiqueta/tamaño de la ESP, y exige la casilla de
+advertencia más `Enter` antes de escribir. Atajos: `F5` actualizar, `F8` abrir
+la exportación del rail (`64 MiB` o geometría de la USB), `F9` plegar/desplegar
+el rail, flechas para elegir, `Enter` preparar, `F10` salir; en los pasos `Esc`
+cancela. Sin privilegios se puede explorar y exportar una imagen, pero el botón
+de preparar queda deshabilitado con el mensaje de privilegios.
 
 La CLI headless construye y verifica imágenes sin tocar hardware:
 

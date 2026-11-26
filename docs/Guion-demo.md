@@ -30,7 +30,11 @@ demo no necesita root.
 - Mostrar la lista con modelo, serie, tamaño y montajes.
 - Señalar que la política de seguridad rechaza el disco raíz y los discos no
   extraíbles.
-- Pulsar `F8`: la imagen se exporta a `build/booteable-export-*.img`.
+- Pulsar `F8`: se despliega el rail de herramientas con `[ 64 MiB ]` y
+  `[ /dev/sdb ]`. Elegir `64 MiB`; la imagen se exporta a
+  `build/booteable-export-64mib.img`. La opción con la geometría seleccionada
+  produce `build/booteable-export-sdb.img` y no toca la USB.
+- Mostrar que `Preparar /dev/sdb` es la única acción sobre la selección.
 - Intentar preparar: el botón está deshabilitado y el estado sugiere `sudo`.
 - Salir con `F10`.
 
@@ -72,8 +76,8 @@ La suite ejercita cancelación durante la escritura, `ENODEV` simulado y
 desmontaje fallido. El punto que hay que remarcar: una cancelación produce
 **INCOMPLETO**, nunca **VERIFICADO**.
 
-Si se hace con una USB de laboratorio desechable, cancelar con `Esc` en
-`ProgressScene` y mostrar el resultado en ámbar. No usar una USB con datos.
+Si se hace con una USB de laboratorio desechable, cancelar con `Esc` en la
+tarjeta de paso y mostrar el resultado en ámbar. No usar una USB con datos.
 
 ## 5. Arranque virtual (2 min)
 

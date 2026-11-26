@@ -170,7 +170,8 @@ prosa y las etiquetas de la interfaz, en español.
 | `Tab` / `Shift+Tab` | Cambiar de panel. |
 | `↑` / `↓` | Mover la selección en la lista. |
 | `Enter` | Abrir la preparación del dispositivo seleccionado. |
-| `F8` | Exportar la imagen sin escribir la USB. |
+| `F8` | Abrir la página de exportación del rail: 64 MiB o geometría de la USB. |
+| `F9` | Plegar o desplegar el rail de herramientas. |
 | `Esc` | Cerrar el diálogo o cancelar la preparación (con confirmación). |
 | `F10` | Salir. |
 | `Espacio` | Marca o desmarca la casilla de confirmación. |
