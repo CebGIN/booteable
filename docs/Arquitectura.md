@@ -307,6 +307,9 @@ Reglas de validación en `domain/Validation.*`:
 - `esp_bytes` configurable: `0` significa automático (64 MiB con 512, 260 MiB
   con 4096). Un valor explícito debe quedar entre el mínimo de 48/260 MiB y el
   máximo de 2 GiB, y ser múltiplo del sector lógico.
+- Si la ESP automática no entra, `Validation` la reduce al mayor tamaño que quepa
+  antes de la GPT de respaldo, igual que `ImageLayout`, siempre por encima del
+  mínimo FAT32. Una ESP pedida explícitamente que no entra se rechaza.
 - `esp_first_lba + esp_sectors + entry_sectors + 1 <= disk_bytes / logical_sector`
   (ESP, GPT de respaldo y alineación).
 - `volume_label` configurable: 1–11 caracteres ASCII imprimibles, sin minúsculas
@@ -339,6 +342,18 @@ public:
     virtual bool read_back(std::byte* data, std::size_t bytes,
                            std::string& error) = 0;
     virtual void close() = 0;
+
+    // Extensiones compatibles de WP3b.
+    virtual bool read_at(std::uint64_t offset, std::byte* data,
+                         std::size_t bytes, std::string& error) {
+        (void)offset; (void)data; (void)bytes;
+        error = "El escritor no soporta lectura por offset.";
+        return false;
+    }
+    virtual int last_errno() const { return 0; }
+    virtual std::uint64_t size() const { return 0; }
+    virtual std::uint32_t sector_size() const { return 0; }
+    virtual std::uint64_t bytes_written() const { return 0; }
 };
 
 class IImageVerifier {
@@ -359,6 +374,14 @@ public:
     virtual PrepProgress progress() const = 0;
     virtual PrepResult result() const = 0;
     virtual bool running() const = 0;
+
+    // Extensiones compatibles de WP4b: la UI no conoce root, sysfs ni /dev.
+    virtual bool can_write() const { return true; }
+    virtual std::string write_block_reason() const { return {}; }
+    virtual bool export_image(const PrepConfig&, std::string& error) {
+        error = "El controlador no permite exportar imágenes.";
+        return false;
+    }
 };
 
 } // namespace booteable
@@ -369,12 +392,28 @@ Adaptadores:
 | Interfaz | Implementación real | Implementación de prueba |
 |---|---|---|
 | `IBlockDeviceSource` | `SysfsBlockDeviceSource` | `FakeBlockDeviceSource` (JSON/fixtures) |
-| `IDeviceWriter` | `PosixDeviceWriter` | `MemoryDeviceWriter` / `FileDeviceWriter` |
-| `IImageVerifier` | `ImageVerifier` | `CorruptingVerifier` |
+| `IDeviceWriter` | `PosixDeviceWriter` | `FileDeviceWriter` / `FaultyDeviceWriter` |
+| `IImageVerifier` | `ImageVerifier` | — (las pruebas corrompen la imagen y releen) |
 | `IPrepController` | `PrepController` | `FakePrepController` |
 
 `PrepController` se construye con las fábricas reales; la UI recibe solo
 `IPrepController`. `booteable-image` compone las mismas piezas sin UI.
+
+### 6.1 Cambios de contrato posteriores a WP0
+
+WP0 congeló `src/domain/` y las interfaces de `src/app/`. El cierre de WP5
+auditó las diferencias y todas son **aditivas y compatibles**; no se rompió
+ninguna implementación existente:
+
+| WP | Archivo | Cambio | Motivo |
+|---|---|---|---|
+| WP3a | `domain/Types.hpp` | `DevicePartition.dev_id`; `DeviceInfo.dev_id` y `holders` | Relacionar montajes y detectar LVM/RAID |
+| WP3b | `device/IDeviceWriter.hpp` | `read_at`, `last_errno`, `size`, `sector_size`, `bytes_written` | Releer regiones, traducir errores y validar geometría |
+| WP4b | `app/IPrepController.hpp` | `can_write`, `write_block_reason`, `export_image` | La UI no conoce `root`, `sysfs` ni `/dev` |
+
+Los métodos nuevos tienen implementación por defecto, salvo los campos de
+`DeviceInfo`/`DevicePartition`, que se inicializan solos y no cambian el uso
+existente.
 
 ## 7. Formato del medio
 
@@ -486,8 +525,8 @@ cluster_count = floor(data_sectors / sectors_per_cluster)
 
 Se exige `cluster_count >= 65525` (mínimo FAT32) y `fat_sectors < 65536`. Con
 sector de 512 el mínimo práctico es **48 MiB**; con 4096, **260 MiB**. El tamaño
-por defecto es 64 MiB en 512 y 260 MiB en 4Kn; el usuario puede elegir otro
-siempre que cumpla el mínimo.
+por defecto es 64 MiB en 512 y 260 MiB en 4Kn; la CLI permite elegir otro
+siempre que cumpla el mínimo. La TUI usa el valor automático.
 
 Contenido:
 
@@ -592,8 +631,8 @@ comparar; un cambio produce `Disconnected` y el resultado no es `Verified`.
   cierra; el resultado es `Cancelled` con `Incomplete = true`.
 - Durante `Verifying`: se puede cancelar; el resultado es `Cancelled` e
   `Incomplete`, aunque la escritura haya terminado.
-- El token de cancelación es un `std::atomic_bool` en `app/CancellationToken.hpp`
-  y se consulta cada 1 MiB.
+- El token de cancelación es un `std::atomic_bool` que `PrepController` pasa a
+  `PrepRunner`; `DeviceFlasher` lo consulta entre bloques de 1 MiB.
 
 ## 9. Máquina de estados
 
@@ -822,25 +861,38 @@ El mensaje siempre incluye: dispositivo, etapa y resultado. Los detalles técnic
 No se agrega un framework externo: `tests/TestHarness.hpp` con `CHECK`/`CHECK_EQ`
 y objetivos de CTest, igual que los proyectos de referencia.
 
-| Prueba | Tipo | Qué verifica |
+| Prueba CTest | Tipo | Qué verifica |
 |---|---|---|
-| `test_crc32_sha256` | unitaria | Vectores conocidos de CRC32 y SHA-256 |
+| `test_core` | unitaria | Vectores conocidos de CRC32 y SHA-256 |
 | `test_gpt` | unitaria | MBR protector, GPT primaria/respaldo, CRC, GUID y límites con 512 y 4096 |
 | `test_fat32` | unitaria | BPB, FSInfo, FAT duplicada, cadena y archivo 8.3, con sector 512 y 4096 |
 | `test_image_roundtrip` | unitaria | Construir → verificar → corromper → fallar |
 | `test_layout` | unitaria | Cálculos de FAT, clústeres, alineación y mínimos de 48/260 MiB |
+| `test_validation` | unitaria | Etiqueta, casilla, ESP mínima por sector, reducción automática y tamaño del EFI |
 | `test_safety_policy` | unitaria | Raíz, disco interno, sin serie, montado, 4Kn aceptado, sector raro, LVM, capacidad |
-| `test_validation` | unitaria | Etiqueta, casilla de confirmación, ESP mínima por sector, tamaño del EFI |
+| `test_sysfs_source` | unitaria | Enumeración sysfs con fixtures |
+| `test_mount_manager` | unitaria | Montajes, desmontaje y relectura de `mountinfo` |
 | `test_device_writer` | integración | Escritura en archivo regular y dispositivo falso; relectura y SHA |
-| `test_cancel` | integración | Cancelación durante escritura → `Incomplete`, no `Verified` |
-| `test_qemu_boot` | integración opcional | QEMU + OVMF y `BOOTEABLE-BOOT-OK` en serie; se salta si faltan |
+| `test_flash` | integración | Escritura, desconexión, cancelación (`Incomplete`), tamaño/sector y desmontaje |
+| `test_prep_controller` | integración | Hilos, privilegios, exportación, cancelación y ausencia de descriptores colgados |
+| `test_ui_flow` | unitaria | Escenas, confirmación y layouts a 80×24 y 120×40 |
+| `test_fake_controller` | unitaria | Flujo completo con el controlador falso |
+| `efi_binary` | integración | Cabecera PE32+, subsistema EFI y ausencia de imports de Windows |
+| `image_cli` | integración | `build`/`verify` en 512 y 4096, corrupción y `fsck.vfat` opcional |
+| `flash_cli` | integración | `flash` sobre archivo regular, rechazos y confirmación |
+| `qemu_boot` / `qemu_boot_image` / `qemu_boot_4kn` | integración opcional | QEMU + OVMF y `BOOTEABLE-BOOT-OK` en serie; se saltan si faltan |
+| `qemu_secure_boot` | integración opcional | El PE sin firma no arranca con Secure Boot |
 | Aceptación manual | manual | P1–P4, P9 y P10 de `Requerimientos.md` |
 
 Criterios transversales:
 
-- `ctest --output-on-failure` pasa sin red, sin root y sin USB real.
+- `ctest -j4 --output-on-failure` pasa sin red, sin root y sin USB real en menos
+  de 2 minutos en un equipo de 4 núcleos. `tests/main.cpp` acepta una suite por
+  argumento y CTest registra cada una por separado.
 - La prueba QEMU detecta la ausencia de OVMF (`OVMF_CODE_4M.fd`,
   `OVMF_CODE.fd` o `OVMF_CODE`/`OVMF_VARS`) y se salta con un mensaje, no falla.
+- Las cuatro pruebas QEMU comparten las variables de OVMF y el log serie; se
+  serializan con `RESOURCE_LOCK qemu_ovmf` aunque CTest use `-j4`.
 - Ningún test deja archivos grandes en el repositorio; usan `build/` o
   `std::filesystem::temp_directory_path()`.
 - La imagen de prueba por defecto es de 64 MiB + overhead; el test de tamaño
@@ -860,7 +912,7 @@ Criterios transversales:
 | RF-09 formato coherente | `GptWriter`, `Fat32Writer` | `test_gpt`, `test_fat32` |
 | RF-10 desmontaje | `MountManager` | `test_device_writer` con montaje falso |
 | RF-11 progreso | `PrepController`, `ProgressScene` | Etapas y porcentaje en vivo |
-| RF-12 cancelación | `CancellationToken` | `test_cancel` |
+| RF-12 cancelación | `std::atomic_bool` + `PrepController` | `test_flash` y `test_prep_controller` |
 | RF-13 verificación | `DeviceWriter` + `ImageVerifier` | SHA-256 releído y CRC/FAT |
 | RF-14 errores | `PrepOutcome` + UI | Tabla §13 y P10 |
 | RF-15 prueba virtual | `tools/run-qemu.sh` | `test_qemu_boot` |
@@ -900,8 +952,8 @@ previas se exportan con el CLI de draw.io. Páginas:
 | # | Página | Contenido | Vista previa |
 |---|---|---|---|
 | 1 | Componentes | Módulos por mundo, medio USB, cadena de arranque y contrato de formato | [PNG](diagramas/01-componentes.png) |
-| 2 | Clases | Enumeraciones, structs del dominio, contratos e implementaciones | [PNG](diagramas/02-clases.png) |
-| 3 | Secuencia | Preparación completa y cancelación | [PNG](diagramas/03-secuencia.png) |
+| 2 | Clases | Enumeraciones, structs, contratos e implementaciones de WP3/WP4, incluidos `PrepRunner` y `DeviceFlasher` | [PNG](diagramas/02-clases.png) |
+| 3 | Secuencia | Preparación a través de `PrepRunner`/`DeviceFlasher` y cancelación | [PNG](diagramas/03-secuencia.png) |
 | 4 | Estados | `PrepStage` de la preparación y terminales | [PNG](diagramas/04-estados.png) |
 | 5 | Leyenda | Relaciones UML, visibilidad y estereotipos | [PNG](diagramas/05-leyenda.png) |
 
@@ -926,9 +978,15 @@ Regeneración de las vistas previas (el snap de draw.io no puede escribir en
 
 ```bash
 python3 tools/generate_diagram.py
-mkdir -p build/diagramas
 for i in 1 2 3 4 5; do
-  drawio -x -f png -o build/diagramas/p$i.png -p $i -s 1.4 docs/diagrama.drawio
+  case $i in
+    1) name=01-componentes ;;
+    2) name=02-clases ;;
+    3) name=03-secuencia ;;
+    4) name=04-estados ;;
+    5) name=05-leyenda ;;
+  esac
+  drawio -x -f png -o "docs/diagramas/$name.png" -p "$i" -s 1.3 docs/diagrama.drawio
 done
 ```
 
@@ -946,15 +1004,17 @@ src/
                   ImageVerifier · ImageLayout
   device/         IBlockDeviceSource · SysfsBlockDeviceSource
                   SafetyPolicy · MountManager · IDeviceWriter
-                  PosixDeviceWriter · DeviceIdentity
-  app/            IPrepController · PrepController · PrepRunner
-                  CancellationToken · FakePrepController
-  ui/             MainScene · ConfirmDialog · ProgressScene
+                  PosixDeviceWriter · FileDeviceWriter · DeviceFlasher
+  app/            IPrepController · PrepController · IPrepRunner · PrepRunner
+                  FakePrepController
+  ui/             AppScene · MainScene · ConfirmDialog · ProgressScene
                   ResultScene · UiFormat
   cli/            main.cpp (build/verify/flash)
-tests/            TestHarness.hpp · fixtures/ · test_*.cpp
-tools/            build-efi.sh · run-qemu.sh · embed-efi.py · check-image.sh
-docs/             Requerimientos · Arquitectura · Glosario · Plan · diagrama
+tests/            TestHarness.hpp · test_*.cpp (una suite por argumento)
+tools/            build-efi.sh · run-qemu.sh · embed-efi.py · check-efi.py
+                  generate_diagram.py · test-image-cli.sh · test-cli-flash.sh
+docs/             Requerimientos · Arquitectura · Glosario · Plan · Evidencias
+                  Prueba-fisica · Guion-demo · diagrama
 build/generated/  EmbeddedBootImage.cpp/.hpp (generado por CMake)
 ```
 
@@ -968,7 +1028,8 @@ Targets CMake:
 | `booteable_ui` | `booteable_core` + Guayaba | Solo `app/` y `domain/` |
 | `booteable` | `booteable_ui` + `booteable_core` | TUI |
 | `booteable-image` | `booteable_core` | CLI headless |
-| `booteable_tests` | `booteable_core` | CTest |
+| `booteable_tests` | `booteable_core` + `booteable_ui` | Suites por argumento |
+| `check` | — | `ctest -j4 --output-on-failure` |
 
 Reglas de dependencia:
 
