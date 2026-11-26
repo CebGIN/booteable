@@ -1,6 +1,7 @@
 #ifndef BOOTEABLE_APP_IPREPCONTROLLER_HPP
 #define BOOTEABLE_APP_IPREPCONTROLLER_HPP
 
+#include <string>
 #include <vector>
 
 #include "domain/Types.hpp"
@@ -21,6 +22,16 @@ public:
     virtual PrepProgress progress() const = 0;
     virtual PrepResult result() const = 0;
     virtual bool running() const = 0;
+
+    // Extensiones de WP4 con implementación por defecto: la UI necesita saber
+    // si puede escribir y exportar sin conocer root, sysfs ni /dev. El fake
+    // hereda los valores permisivos; PrepController los sobrescribe.
+    virtual bool can_write() const { return true; }
+    virtual std::string write_block_reason() const { return {}; }
+    virtual bool export_image(const PrepConfig&, std::string& error) {
+        error = "El controlador no permite exportar imágenes.";
+        return false;
+    }
 };
 
 } // namespace booteable

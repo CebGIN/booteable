@@ -17,7 +17,7 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 
 ## Estado
 
-**WP0, WP1, WP2, WP3a y WP3b implementados.**
+**WP0, WP1, WP2, WP3a, WP3b, WP4a y WP4b implementados.**
 
 - **WP1** entrega la aplicación EFI completa: mensaje fijo, colores, salida por
   consola y puerto serie, espera de tecla con límite, apagado limpio con
@@ -32,10 +32,19 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 - **WP3b** entrega el desmontaje controlado, el escritor POSIX, los fakes y el
   comando `flash`, que valida identidad y geometría, desmonta, abre con `O_EXCL`,
   escribe, sincroniza y relee el manifiesto por regiones.
+- **WP4a** entrega las escenas navegables de la TUI (`MainScene`, `ConfirmDialog`,
+  `ProgressScene`, `ResultScene`), el formato de tamaños/hashes/estados y el flujo
+  completo contra `FakePrepController`, con layout apilado a 80×24 y de dos
+  columnas a 120×40.
+- **WP4b** entrega `PrepController`, con hilo de trabajo y cancelación, y
+  `PrepRunner`, que construye la imagen, desmonta, escribe, sincroniza y verifica
+  sobre datos reales. La TUI usa el controlador real desde `main`; sin `root` se
+  puede enumerar y exportar, pero la escritura queda deshabilitada con el mensaje
+  de privilegios.
 
-El flujo completo de la TUI sobre datos reales es WP4b y la integración final es
-WP5. La TUI actual sigue siendo la escena mínima de WP0 con datos simulados; la
-CLI ya puede escribir un dispositivo real con `booteable-image flash`.
+El flujo completo de la TUI sobre datos reales ya está implementado (WP4b); WP5
+es la integración y prueba final. La CLI sigue disponible para construir,
+verificar y escribir imágenes de forma headless.
 
 La ruta elegida es **UEFI x86_64** con tabla **GPT** y una **ESP FAT32** que
 contiene `\EFI\BOOT\BOOTX64.EFI`. Es la ruta que el equipo de prueba admite y la
@@ -105,13 +114,15 @@ nuestro código. Por eso GPT y FAT32 se generan en `image/` y no se invocan
 ## Ejecutar
 
 ```bash
-./build/booteable        # TUI de WP0: escena mínima con datos simulados; F10 sale
+sudo ./build/booteable   # TUI real; sin sudo enumera y exporta, pero no escribe
 ```
 
-En WP4 la TUI va a enumerar las USB, mostrar identificador, capacidad, serie,
-puntos de montaje y la etiqueta/tamaño elegidos, y exigir la casilla de
-advertencia más `Enter` antes de escribir. Sin privilegios se podrá explorar y
-exportar una imagen, pero no escribir un dispositivo.
+La TUI enumera las USB, muestra identificador, capacidad, serie, puntos de montaje
+y la etiqueta/tamaño de la ESP, y exige la casilla de advertencia más `Enter`
+antes de escribir. Atajos: `F5` actualizar, flechas para elegir, `Enter`
+preparar, `F8` exportar la imagen, `F10` salir; en progreso `Esc` cancela. Sin
+privilegios se puede explorar y exportar una imagen, pero el botón de preparar
+queda deshabilitado con el mensaje de privilegios.
 
 La CLI headless construye y verifica imágenes sin tocar hardware:
 
@@ -192,8 +203,10 @@ Las pruebas son headless, no requieren red, root ni una USB real:
 
 - `unit`: dominio, controlador falso, CRC32/SHA-256, geometría, GPT, FAT32,
   roundtrip de imagen y corrupción de cada región, enumeración sysfs con
-  fixtures, política de seguridad, montajes, escritor de archivos y flujo de
-  escritura (incluidas desconexión y cancelación).
+  fixtures, política de seguridad, montajes, escritor de archivos, flujo de
+  escritura (incluidas desconexión y cancelación), escenas de la TUI a 80×24 y
+  120×40, y `PrepController`/`PrepRunner` con hilos, privilegios, exportación y
+  cancelación.
 - `efi_binary`: cabecera PE32+, subsistema EFI, ausencia de imports de Windows y
   presencia del marcador.
 - `image_cli`: `build`/`verify` en 512 y 4096, tamaño exacto, etiqueta, detección
@@ -248,8 +261,8 @@ src/
   core/       SHA-256, CRC32 y utilidades de bytes
   image/      ImageLayout, GPT, FAT32, ensamblado y verificador de imagen
   device/     Enumeración sysfs, política, montajes, escritor y flujo de flash
-  app/        Controlador falso; controlador real y runner en WP4b
-  ui/         Escenas, confirmación y progreso (WP4a)
+  app/        FakePrepController, PrepController y PrepRunner
+  ui/         Escenas, confirmación, progreso, resultado y formato
   cli/        build, verify y flash
 tools/        build-efi, embed-efi, run-qemu, check-efi, test-image-cli,
               test-cli-flash

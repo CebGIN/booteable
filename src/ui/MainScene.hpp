@@ -1,23 +1,48 @@
 #ifndef BOOTEABLE_UI_MAINSCENE_HPP
 #define BOOTEABLE_UI_MAINSCENE_HPP
 
-#include <memory>
+#include <string>
+#include <vector>
 
-namespace guayaba {
-class Node;
-}
+#include <guayaba/Guayaba.hpp>
 
-namespace booteable {
+#include "domain/Types.hpp"
 
-class IPrepController;
+namespace booteable::ui {
 
-namespace ui {
+class AppScene;
 
-// Escena mínima de WP0: valida que Guayaba abre, dibuja y cierra. WP4a la
-// reemplaza por la pantalla completa de preparación.
-std::unique_ptr<guayaba::Node> build_main_scene(IPrepController& controller);
+struct UiState;
 
-} // namespace ui
-} // namespace booteable
+struct MainSceneWidgets {
+    guayaba::NodeRef<guayaba::PanelContainer> panel;
+    guayaba::NodeRef<guayaba::SplitContainer> split;
+    guayaba::NodeRef<guayaba::PanelContainer> devices_panel;
+    guayaba::NodeRef<guayaba::PanelContainer> details_panel;
+    guayaba::NodeRef<guayaba::ListView> device_list;
+    guayaba::NodeRef<guayaba::Label> count;
+    guayaba::NodeRef<guayaba::Label> detail_title;
+    guayaba::NodeRef<guayaba::Label> detail_model;
+    guayaba::NodeRef<guayaba::Label> detail_capacity;
+    guayaba::NodeRef<guayaba::Label> detail_serial;
+    guayaba::NodeRef<guayaba::Label> detail_by_id;
+    guayaba::NodeRef<guayaba::Label> detail_mounts;
+    guayaba::NodeRef<guayaba::Label> detail_safety;
+    guayaba::NodeRef<guayaba::Label> detail_image;
+    guayaba::NodeRef<guayaba::Button> prepare;
+    guayaba::NodeRef<guayaba::Button> export_image;
+    guayaba::NodeRef<guayaba::Label> status;
+};
+
+// Panel principal: lista de USB y detalles del destino elegido. La disposición
+// en una o dos columnas la decide SplitContainer según el ancho de la pantalla.
+MainSceneWidgets build_main_scene(guayaba::NodeRef<guayaba::Control> parent,
+                                  AppScene& app);
+
+void refresh_main_scene(MainSceneWidgets& widgets,
+                        const std::vector<DeviceInfo>& devices,
+                        const UiState& state);
+
+} // namespace booteable::ui
 
 #endif // BOOTEABLE_UI_MAINSCENE_HPP
