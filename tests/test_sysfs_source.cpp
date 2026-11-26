@@ -53,18 +53,30 @@ struct Fixture {
         return paths;
     }
 
-    void add_usb_disk() {
-        const std::filesystem::path usb_device =
-            sys() / "devices" / "pci0000:00" / "usb1" / "1-1" / "1-1:1.0" /
-            "host0" / "target0:0:0" / "0:0:0:0" / "block" / "sdb";
+    void add_usb_disk(bool usb_serial = true) {
+        // Estructura real de sysfs: el nodo de bloque cuelga del nodo SCSI, y
+        // la serie del pendrive vive en el nodo usb_device (1-1), no en el SCSI.
+        const std::filesystem::path usb_root =
+            sys() / "devices" / "pci0000:00" / "usb1";
+        const std::filesystem::path usb_port = usb_root / "1-1";
+        const std::filesystem::path scsi_device =
+            usb_port / "1-1:1.0" / "host0" / "target0:0:0" / "0:0:0:0";
+        const std::filesystem::path usb_device = scsi_device / "block" / "sdb";
         std::filesystem::create_directories(usb_device);
         std::filesystem::create_directories(sys() / "block");
         std::error_code error;
         std::filesystem::create_directory_symlink(usb_device, sys() / "block" / "sdb",
                                                   error);
+        std::filesystem::create_directory_symlink("../../../0:0:0:0",
+                                                  usb_device / "device", error);
 
-        write_file(usb_device / "device" / "model", "Generic Flash Disk\n");
-        write_file(usb_device / "device" / "serial", "1234ABCD\n");
+        write_file(usb_port / "idVendor", "0951\n");
+        if (usb_serial) {
+            write_file(usb_port / "serial", "1234ABCD\n");
+        }
+        // El controlador también tiene serie; no debe usarse para el disco.
+        write_file(usb_root / "serial", "0000:00:14.0\n");
+        write_file(scsi_device / "model", "Generic Flash Disk\n");
         write_file(usb_device / "size", "16777216\n");  // 8 GiB en sectores de 512
         write_file(usb_device / "queue" / "logical_block_size", "512\n");
         write_file(usb_device / "removable", "1\n");
@@ -171,6 +183,22 @@ void test_enumeration() {
     CHECK(sda.by_id.empty());
 }
 
+void test_usb_without_serial_stays_empty() {
+    // Si el nodo usb_device no publica serie, la política debe rechazarlo. No
+    // se hereda la serie del controlador USB, que comparten todos los puertos.
+    Fixture fixture("booteable-test-sysfs-no-serial");
+    fixture.add_usb_disk(false);
+    fixture.write_mountinfo("");
+
+    const std::vector<DeviceInfo> devices =
+        SysfsBlockDeviceSource(fixture.paths()).list();
+    CHECK_EQ(devices.size(), std::size_t{1});
+    if (!devices.empty()) {
+        CHECK(devices[0].serial.empty());
+        CHECK(devices[0].transport == DeviceTransport::Usb);
+    }
+}
+
 void test_refresh() {
     Fixture fixture("booteable-test-sysfs-refresh");
     fixture.add_usb_disk();
@@ -246,6 +274,7 @@ void test_disk_name_from_major_minor() {
 
 void run_sysfs_source_tests() {
     test_enumeration();
+    test_usb_without_serial_stays_empty();
     test_refresh();
     test_system_context();
     test_transport_from_uevent();

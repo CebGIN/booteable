@@ -56,6 +56,41 @@ std::string read_all(const std::filesystem::path& path) {
     return content.str();
 }
 
+// La serie no siempre está en el nodo SCSI (`device/serial`): los pendrives
+// USB la publican en el nodo usb_device, varios niveles por encima del nodo de
+// bloque. Se sube desde `device` hasta el primer ancestro USB (idVendor) y se
+// lee ahí; si ese nodo no tiene serie se devuelve vacío en vez de seguir hasta
+// el controlador, cuya serie es compartida por todos los puertos.
+std::string read_usb_serial(const std::filesystem::path& device_dir,
+                            const std::filesystem::path& sysfs_root) {
+    const std::string scsi_serial = read_text(device_dir / "device" / "serial");
+    if (!scsi_serial.empty()) {
+        return scsi_serial;
+    }
+
+    std::error_code error;
+    std::filesystem::path current =
+        std::filesystem::weakly_canonical(device_dir / "device", error);
+    if (error) {
+        return {};
+    }
+    const std::filesystem::path stop =
+        std::filesystem::weakly_canonical(sysfs_root, error);
+    if (error) {
+        return {};
+    }
+
+    while (current != current.root_path() && current != stop) {
+        if (std::filesystem::exists(current / "idVendor", error)) {
+            error.clear();
+            return read_text(current / "serial");
+        }
+        error.clear();
+        current = current.parent_path();
+    }
+    return {};
+}
+
 bool is_skipped(const std::string& name) {
     const auto starts_with = [&name](const char* prefix) {
         return name.rfind(prefix, 0) == 0;
@@ -182,7 +217,7 @@ DeviceInfo read_device(const SysfsPaths& paths,
     if (device.model.empty()) {
         device.model = name;
     }
-    device.serial = read_text(device_dir / "device" / "serial");
+    device.serial = read_usb_serial(device_dir, paths.sysfs);
     device.size_bytes = read_u64(device_dir / "size") * 512ull;
     device.logical_sector = static_cast<std::uint32_t>(
         read_u64(device_dir / "queue" / "logical_block_size", 512));
