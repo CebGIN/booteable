@@ -28,6 +28,7 @@ public:
     bool open(const DeviceInfo& device, std::string& error) override;
     bool write(const std::byte* data, std::size_t bytes,
                std::string& error) override;
+    bool seek(std::uint64_t offset, std::string& error) override;
     bool sync(std::string& error) override;
     bool read_back(std::byte* data, std::size_t bytes,
                    std::string& error) override;
@@ -47,6 +48,7 @@ private:
     std::uint64_t size_ = 0;
     std::uint32_t sector_size_ = 512;
     std::uint64_t bytes_written_ = 0;
+    std::uint64_t position_ = 0;
     std::uint64_t read_offset_ = 0;
     bool block_device_ = false;
     int last_errno_ = 0;

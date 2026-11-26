@@ -58,6 +58,10 @@ bool FaultyDeviceWriter::write(const std::byte* data, std::size_t bytes,
     return true;
 }
 
+bool FaultyDeviceWriter::seek(std::uint64_t offset, std::string& error) {
+    return inner_.seek(offset, error);
+}
+
 bool FaultyDeviceWriter::sync(std::string& error) {
     error.clear();
     if (sync_error_ != 0) {

@@ -114,7 +114,8 @@ la TUI es autocontenido y no depende de encontrar `BOOTX64.EFI` en el disco.
 
 La imagen se crea como archivo disperso del tamaño del destino y solo se
 escriben las regiones con contenido (MBR, GPT, ESP y GPT de respaldo). Preparar
-una USB de 64 GB no reserva 64 GB en RAM; la verificación compara únicamente esas
+una USB de 64 GB no reserva 64 GB en RAM: el preparador escribe únicamente esas
+regiones, salteando los huecos, y la verificación compara únicamente esas
 regiones mediante un manifiesto de hashes.
 
 La CLI permite elegir etiqueta y tamaño de ESP con `--label` y `--esp-mib`. La

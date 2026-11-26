@@ -18,6 +18,13 @@ public:
     virtual bool open(const DeviceInfo& device, std::string& error) = 0;
     virtual bool write(const std::byte* data, std::size_t bytes,
                        std::string& error) = 0;
+    // Posiciona el flujo en un offset absoluto. Permite escribir solo las
+    // regiones del manifiesto y saltear los huecos de la imagen dispersa.
+    virtual bool seek(std::uint64_t offset, std::string& error) {
+        (void)offset;
+        error = "El escritor no soporta posicionamiento por offset.";
+        return false;
+    }
     virtual bool sync(std::string& error) = 0;
     virtual bool read_back(std::byte* data, std::size_t bytes,
                            std::string& error) = 0;

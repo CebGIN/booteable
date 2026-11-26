@@ -615,10 +615,15 @@ Detalle por etapa:
 | `Building` | Construir la imagen dispersa y su `ImageManifest` con hashes por región | `BuildError` |
 | `Unmounting` | `umount2(MNT_DETACH)` de cada partición montada | `UnmountError`, sin escribir |
 | `Opening` | `open` con `O_RDWR|O_CLOEXEC|O_EXCL` y `ioctl(BLKGETSIZE64)` | `PermissionDenied` / `DeviceError` |
-| `Writing` | Bloques de 1 MiB; comprobar cancelación entre bloques | `DeviceError` / `Disconnected` |
+| `Writing` | Recorrer las regiones del manifiesto (MBR, GPT primaria, ESP y GPT de respaldo) en bloques de 1 MiB, salteando los huecos de la imagen dispersa; comprobar cancelación entre bloques | `DeviceError` / `Disconnected` |
 | `Syncing` | `fsync` y `ioctl(BLKFLSBUF)` | `DeviceError`; no verificar |
 | `Verifying` | Reabrir en solo lectura, releer las regiones y comparar el manifiesto | `VerificationFailed` |
 | `Done` | Revalidar identidad y cerrar | Si cambió: `Disconnected` |
+
+El porcentaje de escritura se mide sobre la suma de `ImageManifest.regions.length`,
+no sobre `disk_bytes`: los huecos de la imagen dispersa no se escriben. Así el
+progreso refleja el trabajo real y no se queda clavado mientras se rellenan de
+ceros decenas de GB de una USB grande.
 
 Antes de abrir se compara la identidad actual (`path`, `serial`, `by_id`,
 `size_bytes`) con la foto tomada al seleccionar. Después de cerrar se vuelve a

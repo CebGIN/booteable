@@ -21,6 +21,7 @@ public:
     bool open(const DeviceInfo& device, std::string& error) override;
     bool write(const std::byte* data, std::size_t bytes,
                std::string& error) override;
+    bool seek(std::uint64_t offset, std::string& error) override;
     bool sync(std::string& error) override;
     bool read_back(std::byte* data, std::size_t bytes,
                    std::string& error) override;

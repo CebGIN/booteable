@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -37,6 +38,19 @@ bool same_identity(const DeviceInfo& expected, const DeviceInfo& current) {
            expected.logical_sector == current.logical_sector;
 }
 
+// Suma los bytes con contenido del manifiesto. Es el total real de escritura:
+// los huecos de la imagen dispersa no se tocan.
+std::uint64_t region_bytes_total(const std::vector<ImageRegion>& regions) {
+    std::uint64_t total = 0;
+    for (const ImageRegion& region : regions) {
+        if (region.length > std::numeric_limits<std::uint64_t>::max() - total) {
+            return std::numeric_limits<std::uint64_t>::max();
+        }
+        total += region.length;
+    }
+    return total;
+}
+
 } // namespace
 
 PrepResult flash_image_to_device(const DeviceInfo& device,
@@ -47,7 +61,15 @@ PrepResult flash_image_to_device(const DeviceInfo& device,
     PrepResult result;
     result.image_sha256 = expected.manifest_sha256;
 
-    const std::uint64_t total = expected.disk_bytes;
+    // La imagen es dispersa: se escribe únicamente lo que define el manifiesto
+    // (MBR, GPT primaria, ESP y GPT de respaldo). Las regiones se ordenan por
+    // offset y el porcentaje se mide sobre su suma, no sobre disk_bytes.
+    std::vector<ImageRegion> regions = expected.regions;
+    std::sort(regions.begin(), regions.end(),
+              [](const ImageRegion& left, const ImageRegion& right) {
+                  return left.offset < right.offset;
+              });
+    const std::uint64_t total = region_bytes_total(regions);
     const auto cancelled = [&callbacks]() {
         return callbacks.cancel != nullptr && callbacks.cancel->load();
     };
@@ -92,9 +114,22 @@ PrepResult flash_image_to_device(const DeviceInfo& device,
         return fail(PrepOutcome::Cancelled, PrepStage::Validating,
                     "Preparación cancelada antes de empezar.");
     }
-    if (expected.disk_bytes == 0 || expected.regions.empty()) {
+    if (expected.disk_bytes == 0 || regions.empty()) {
         return fail(PrepOutcome::BuildError, PrepStage::Validating,
                     "El manifiesto de la imagen está vacío o incompleto.");
+    }
+    std::uint64_t previous_end = 0;
+    for (const ImageRegion& region : regions) {
+        if (region.length == 0 || region.offset > expected.disk_bytes ||
+            region.length > expected.disk_bytes - region.offset) {
+            return fail(PrepOutcome::BuildError, PrepStage::Validating,
+                        "El manifiesto tiene una región fuera del disco.");
+        }
+        if (region.offset < previous_end) {
+            return fail(PrepOutcome::BuildError, PrepStage::Validating,
+                        "El manifiesto tiene regiones solapadas.");
+        }
+        previous_end = region.offset + region.length;
     }
     if (device.size_bytes != expected.disk_bytes) {
         return fail(PrepOutcome::InvalidTarget, PrepStage::Validating,
@@ -192,40 +227,71 @@ PrepResult flash_image_to_device(const DeviceInfo& device,
                     "No se pudo abrir la imagen para leerla: " + image.string());
     }
 
-    emit(PrepStage::Writing, 0, "Escribiendo la imagen");
+    emit(PrepStage::Writing, 0, "Escribiendo las regiones de la imagen");
     std::vector<char> buffer(static_cast<std::size_t>(kChunkBytes));
-    std::uint64_t offset = 0;
-    while (offset < expected.disk_bytes) {
+    std::uint64_t done = 0;
+    for (const ImageRegion& region : regions) {
         if (cancelled()) {
             std::string ignored;
             result.synchronized = writer.sync(ignored);
+            result.bytes_written = done;
             return fail(PrepOutcome::Incomplete, PrepStage::Writing,
                         "Preparación cancelada durante la escritura.", true);
         }
 
-        const std::size_t take = static_cast<std::size_t>(
-            std::min<std::uint64_t>(buffer.size(), expected.disk_bytes - offset));
-        input.read(buffer.data(), static_cast<std::streamsize>(take));
-        if (input.gcount() != static_cast<std::streamsize>(take)) {
-            return fail(PrepOutcome::BuildError, PrepStage::Writing,
-                        "La imagen terminó antes de lo esperado.", true);
-        }
-
-        if (!writer.write(reinterpret_cast<const std::byte*>(buffer.data()),
-                          take, error)) {
+        if (!writer.seek(region.offset, error)) {
             const PrepOutcome outcome = outcome_for_errno(writer.last_errno());
             std::string ignored;
             result.synchronized = writer.sync(ignored);
-            result.bytes_written = writer.bytes_written() != 0
-                                       ? writer.bytes_written()
-                                       : offset;
+            result.bytes_written = done;
             return fail(outcome, PrepStage::Writing, error, true);
         }
-        offset += take;
-        result.bytes_written = writer.bytes_written() != 0
-                                   ? writer.bytes_written()
-                                   : offset;
-        emit(PrepStage::Writing, offset, "Escribiendo la imagen");
+        input.seekg(static_cast<std::streamoff>(region.offset));
+        if (!input) {
+            return fail(PrepOutcome::BuildError, PrepStage::Writing,
+                        "No se pudo posicionar la imagen en la región de " +
+                            std::to_string(region.offset) + " bytes.",
+                        true);
+        }
+
+        std::uint64_t region_done = 0;
+        while (region_done < region.length) {
+            if (cancelled()) {
+                std::string ignored;
+                result.synchronized = writer.sync(ignored);
+                result.bytes_written = done;
+                return fail(PrepOutcome::Incomplete, PrepStage::Writing,
+                            "Preparación cancelada durante la escritura.",
+                            true);
+            }
+
+            const std::size_t take = static_cast<std::size_t>(
+                std::min<std::uint64_t>(buffer.size(),
+                                        region.length - region_done));
+            input.read(buffer.data(), static_cast<std::streamsize>(take));
+            if (input.gcount() != static_cast<std::streamsize>(take)) {
+                return fail(PrepOutcome::BuildError, PrepStage::Writing,
+                            "La imagen terminó antes de lo esperado.", true);
+            }
+
+            if (!writer.write(
+                    reinterpret_cast<const std::byte*>(buffer.data()), take,
+                    error)) {
+                const PrepOutcome outcome =
+                    outcome_for_errno(writer.last_errno());
+                std::string ignored;
+                result.synchronized = writer.sync(ignored);
+                result.bytes_written = writer.bytes_written() != 0
+                                           ? writer.bytes_written()
+                                           : done;
+                return fail(outcome, PrepStage::Writing, error, true);
+            }
+            region_done += take;
+            done += take;
+            result.bytes_written = done;
+            emit(PrepStage::Writing, done,
+                 "Escribiendo las regiones de la imagen");
+        }
     }
 
     if (cancelled()) {
@@ -235,7 +301,7 @@ PrepResult flash_image_to_device(const DeviceInfo& device,
                     "Preparación cancelada antes de sincronizar.", true);
     }
 
-    emit(PrepStage::Syncing, expected.disk_bytes, "Sincronizando el medio");
+    emit(PrepStage::Syncing, total, "Sincronizando el medio");
     if (!writer.sync(error)) {
         const PrepOutcome outcome = outcome_for_errno(writer.last_errno());
         return fail(outcome, PrepStage::Syncing, error, true);
@@ -248,7 +314,7 @@ PrepResult flash_image_to_device(const DeviceInfo& device,
                     "Preparación cancelada antes de verificar.", true);
     }
 
-    emit(PrepStage::Verifying, expected.disk_bytes,
+    emit(PrepStage::Verifying, total,
          "Releyendo y comparando el manifiesto");
     ImageManifest actual;
     ImageVerifier verifier;
@@ -275,10 +341,10 @@ PrepResult flash_image_to_device(const DeviceInfo& device,
     result.outcome = PrepOutcome::Verified;
     result.failed_stage = PrepStage::Idle;
     result.message = "La imagen se escribió, sincronizó y verificó.";
-    result.bytes_written = expected.disk_bytes;
+    result.bytes_written = total;
     result.synchronized = true;
     result.verified = true;
-    emit(PrepStage::Done, expected.disk_bytes, result.message);
+    emit(PrepStage::Done, total, result.message);
     return result;
 }
 

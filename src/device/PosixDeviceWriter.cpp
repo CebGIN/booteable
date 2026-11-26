@@ -90,6 +90,7 @@ bool PosixDeviceWriter::open(const DeviceInfo& device, std::string& error) {
     sector_size_ = sector;
     block_device_ = block;
     bytes_written_ = 0;
+    position_ = 0;
     read_offset_ = 0;
     return true;
 }
@@ -103,7 +104,7 @@ bool PosixDeviceWriter::write(const std::byte* data, std::size_t bytes,
         last_errno_ = EBADF;
         return false;
     }
-    if (bytes > size_ - bytes_written_) {
+    if (bytes > size_ - position_) {
         error = "La escritura se sale de la capacidad del dispositivo.";
         last_errno_ = ENOSPC;
         return false;
@@ -119,7 +120,7 @@ bool PosixDeviceWriter::write(const std::byte* data, std::size_t bytes,
             }
             last_errno_ = errno;
             error = error_text("Falló la escritura en " +
-                                   std::to_string(bytes_written_ + written) +
+                                   std::to_string(position_ + written) +
                                    " bytes",
                                last_errno_);
             return false;
@@ -131,7 +132,32 @@ bool PosixDeviceWriter::write(const std::byte* data, std::size_t bytes,
         }
         written += static_cast<std::size_t>(result);
     }
+    position_ += bytes;
     bytes_written_ += bytes;
+    return true;
+}
+
+bool PosixDeviceWriter::seek(std::uint64_t offset, std::string& error) {
+    error.clear();
+    last_errno_ = 0;
+    if (fd_ < 0) {
+        error = "El dispositivo no está abierto.";
+        last_errno_ = EBADF;
+        return false;
+    }
+    if (offset > size_) {
+        error = "El posicionamiento se sale de la capacidad del dispositivo.";
+        last_errno_ = EINVAL;
+        return false;
+    }
+    if (::lseek(fd_, static_cast<off_t>(offset), SEEK_SET) < 0) {
+        last_errno_ = errno;
+        error = error_text("Falló el posicionamiento en " +
+                               std::to_string(offset) + " bytes",
+                           last_errno_);
+        return false;
+    }
+    position_ = offset;
     return true;
 }
 
@@ -215,6 +241,7 @@ void PosixDeviceWriter::close() {
     fd_ = -1;
     size_ = 0;
     bytes_written_ = 0;
+    position_ = 0;
     read_offset_ = 0;
     block_device_ = false;
 }

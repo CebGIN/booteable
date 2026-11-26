@@ -68,6 +68,14 @@ std::filesystem::path empty_mountinfo(const std::string& name) {
     return path;
 }
 
+std::uint64_t region_total(const ImageManifest& manifest) {
+    std::uint64_t total = 0;
+    for (const booteable::ImageRegion& region : manifest.regions) {
+        total += region.length;
+    }
+    return total;
+}
+
 void test_flash_512_roundtrip(const std::filesystem::path& image,
                               const ImageManifest& manifest) {
     const std::filesystem::path dest =
@@ -87,7 +95,9 @@ void test_flash_512_roundtrip(const std::filesystem::path& image,
     CHECK(result.failed_stage == PrepStage::Idle);
     CHECK_EQ(result.image_sha256, manifest.manifest_sha256);
     CHECK_EQ(result.device_sha256, manifest.manifest_sha256);
-    CHECK_EQ(result.bytes_written, manifest.disk_bytes);
+    // Solo se escriben las regiones con contenido, no los huecos del disco.
+    CHECK_EQ(result.bytes_written, region_total(manifest));
+    CHECK(result.bytes_written < manifest.disk_bytes);
     CHECK_EQ(std::filesystem::file_size(dest), manifest.disk_bytes);
 
     ImageManifest read_back;
@@ -115,6 +125,7 @@ void test_flash_4kn_roundtrip(const std::filesystem::path& image,
     CHECK(result.outcome == PrepOutcome::Verified);
     CHECK(result.verified);
     CHECK_EQ(result.device_sha256, manifest.manifest_sha256);
+    CHECK_EQ(result.bytes_written, region_total(manifest));
     CHECK_EQ(std::filesystem::file_size(dest), manifest.disk_bytes);
 
     std::filesystem::remove(dest);
@@ -305,6 +316,50 @@ void test_flash_unmount_failure_does_not_open(
     std::filesystem::remove(mountinfo);
 }
 
+void test_flash_writes_only_regions(const std::filesystem::path& image,
+                                    const ImageManifest& manifest) {
+    const std::filesystem::path dest =
+        temp_path("booteable-test-flash-regions-target.img");
+    const std::filesystem::path mountinfo =
+        empty_mountinfo("booteable-test-flash-regions-mountinfo");
+
+    // Destino preexistente con basura en los huecos: la preparación solo debe
+    // tocar las regiones del manifiesto y la verificación debe pasar igual.
+    {
+        std::ofstream file(dest, std::ios::binary | std::ios::trunc);
+        file.close();
+    }
+    std::filesystem::resize_file(dest, manifest.disk_bytes);
+    const std::uint64_t hole = manifest.disk_bytes - 8 * booteable::kMib;
+    {
+        std::fstream file(dest, std::ios::binary | std::ios::in |
+                                    std::ios::out);
+        file.seekp(static_cast<std::streamoff>(hole));
+        file.put(static_cast<char>(0x5a));
+    }
+
+    const DeviceInfo device = file_device(dest, manifest, 512);
+    FileDeviceWriter writer;
+    MountManager mounts(mountinfo);
+    const PrepResult result = booteable::flash_image_to_device(
+        device, image, manifest, writer, mounts);
+
+    CHECK(result.outcome == PrepOutcome::Verified);
+    CHECK_EQ(result.bytes_written, region_total(manifest));
+
+    std::ifstream check(dest, std::ios::binary);
+    check.seekg(static_cast<std::streamoff>(hole));
+    char leftover = 0;
+    check.get(leftover);
+    CHECK(check.good());
+    CHECK_EQ(leftover, static_cast<char>(0x5a));
+    CHECK_EQ(std::filesystem::file_size(dest), manifest.disk_bytes);
+
+    check.close();
+    std::filesystem::remove(dest);
+    std::filesystem::remove(mountinfo);
+}
+
 } // namespace
 
 void run_flash_tests() {
@@ -325,6 +380,7 @@ void run_flash_tests() {
     if (built512.ok && built4kn.ok) {
         test_flash_512_roundtrip(image512, built512.manifest);
         test_flash_4kn_roundtrip(image4kn, built4kn.manifest);
+        test_flash_writes_only_regions(image512, built512.manifest);
         test_flash_disconnected_mid_write(image512, built512.manifest);
         test_flash_cancelled_mid_write_is_incomplete(image512,
                                                      built512.manifest);

@@ -77,6 +77,43 @@ void test_file_writer_roundtrip() {
     std::filesystem::remove(path);
 }
 
+void test_writer_seeks_by_offset() {
+    const std::filesystem::path path =
+        temp_file("booteable-test-writer-seek.img");
+    const std::uint64_t size = 8192;
+
+    FileDeviceWriter writer(true, true);
+    std::string error;
+    CHECK(writer.open(make_file_device(path, size), error));
+    if (!error.empty()) {
+        return;
+    }
+
+    std::vector<std::byte> data(512, std::byte{0x7c});
+    CHECK(writer.seek(4096, error));
+    CHECK(writer.write(data.data(), data.size(), error));
+    CHECK_EQ(writer.bytes_written(), data.size());
+
+    // El flujo quedó en 4608: un nuevo seek vuelve a la región elegida.
+    CHECK(writer.seek(1024, error));
+    CHECK(writer.write(data.data(), data.size(), error));
+    CHECK_EQ(writer.bytes_written(), 2 * data.size());
+
+    std::vector<std::byte> read_back(data.size());
+    CHECK(writer.read_at(4096, read_back.data(), read_back.size(), error));
+    CHECK(read_back == data);
+    CHECK(writer.read_at(4608, read_back.data(), read_back.size(), error));
+    CHECK(read_back != data);
+    CHECK(writer.read_at(1024, read_back.data(), read_back.size(), error));
+    CHECK(read_back == data);
+
+    CHECK(!writer.seek(size + 1, error));
+    CHECK_EQ(writer.last_errno(), EINVAL);
+
+    writer.close();
+    std::filesystem::remove(path);
+}
+
 void test_writer_rejects_overflow() {
     const std::filesystem::path path =
         temp_file("booteable-test-writer-overflow.img");
@@ -177,6 +214,7 @@ void test_faulty_writer_injects_sync_error() {
 
 void run_device_writer_tests() {
     test_file_writer_roundtrip();
+    test_writer_seeks_by_offset();
     test_writer_rejects_overflow();
     test_posix_writer_requires_existing_file();
     test_posix_writer_existing_file();
