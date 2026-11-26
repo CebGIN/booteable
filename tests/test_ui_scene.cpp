@@ -51,6 +51,7 @@ void test_theme_parses_and_builds() {
     CHECK(built.ok());
     CHECK(built.theme != nullptr);
     CHECK(built.theme->has_style("panel"));
+    CHECK(built.theme->has_style("background"));
     CHECK(built.theme->has_style("rail"));
     CHECK(built.theme->has_style("step_panel"));
     CHECK(built.theme->has_style("spinner"));
@@ -72,6 +73,18 @@ void test_bundle_builds_expected_widgets() {
 
     const auto shell = booteable::ui::take_root(bundle, "shell");
     CHECK(shell != nullptr);
+    // Un solo panel de fondo cubre toda la pantalla; si faltara, las celdas no
+    // dibujadas conservan el blanco con el que el renderer limpia el buffer.
+    const auto* shell_background = dynamic_cast<PanelContainer*>(shell.get());
+    CHECK(shell_background != nullptr);
+    if (shell_background != nullptr) {
+        const guayaba::StyleBox& box = shell_background->get_stylebox();
+        CHECK(box.has_background());
+        CHECK(box.get_background_color() ==
+              guayaba::Color::from_name(guayaba::Color::BLACK));
+        CHECK_EQ(box.get_content_margin().horizontal(), 0);
+        CHECK_EQ(box.get_content_margin().vertical(), 0);
+    }
     CHECK(shell->get_node<HBox>("app_frame").is_valid());
     CHECK(shell->get_node<Control>("app_frame/rail_slot").is_valid());
     CHECK(shell->get_node<Control>("app_frame/shell/stage_slot").is_valid());
