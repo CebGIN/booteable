@@ -110,8 +110,8 @@ Los identificadores `RF-*` se usan en `Arquitectura.md` y en las pruebas.
 | **P6 · Escritura y verificación** | integración | Escribir en un archivo/dispositivo falso y comparar SHA-256; simular desconexión y error de escritura |
 | **P7 · Cancelación** | integración | Cancelar durante la escritura deja el resultado `Incomplete` y no `Verified` |
 | **P8 · Arranque virtual** | integración | QEMU + OVMF arranca la imagen y el puerto serie contiene `BOOTEABLE-BOOT-OK` |
-| **P9 · Arranque físico** | manual | La USB inicia en el equipo de prueba y muestra el mensaje del grupo |
-| **P10 · Permisos** | manual | Sin `root`, la escritura se bloquea con un mensaje que sugiere `sudo`; la app no se cae |
+| **P9 · Arranque físico** | manual | La USB inicia en el equipo de prueba y muestra el mensaje del grupo; checklist en `docs/Prueba-fisica.md` |
+| **P10 · Permisos** | manual + unitaria | Sin `root`, la escritura se bloquea con un mensaje que sugiere `sudo`; la app no se cae. Cubierta por `test_prep_controller` y la prueba manual |
 
 ## Fuera de alcance del MVP
 
