@@ -167,7 +167,7 @@ c.append(box(
 c.append(box(
     "cmp_app", ST_COMPONENT,
     "<b>app/</b><br><font style='font-size:9px;color:#666666'>dueño del ciclo de vida</font><br>"
-    "PrepController · PrepRunner · CancellationToken<br>FakePrepController<br>"
+    "PrepController · PrepRunner · IPrepRunner<br>FakePrepController<br>"
     "Orquesta etapas, progreso y cancelación",
     70, 270, 720, 95))
 c.append(box(
@@ -381,6 +381,13 @@ add("impl_writer", "«class» PosixDeviceWriter", [], 620, 930, 240, methods=[
 add("impl_verify", "«class» ImageVerifier", [], 890, 930, 240, methods=[
     "+ verify(image): ImageManifest",
 ])
+add("impl_runner", "«class» PrepRunner", [], 1160, 930, 320, methods=[
+    "+ run(config, cancel): PrepResult",
+    "+ build_image(config): ImageBuildResult",
+])
+add("impl_flasher", "«class» DeviceFlasher", [], 1160, 1070, 320, methods=[
+    "+ flash(device, image, manifest): PrepResult",
+])
 
 # Relaciones estructurales
 c.append(rel("rel_composition", "cls_config", "cls_device", ST_COMP, "",
@@ -398,16 +405,32 @@ c.append(rel("rel_writer", "impl_writer", "if_writer", ST_REAL, "",
              (0.5, 0.0), (0.5, 1.0)))
 c.append(rel("rel_verify", "impl_verify", "if_verify", ST_REAL, "",
              (0.5, 0.0), (0.5, 1.0)))
+# Flujo real de WP4b: el runner construye y delega la escritura/verificación en
+# DeviceFlasher. Las flechas se mantienen verticales para no cruzar el resto de
+# las clases; el resto del flujo se ve en la página 3.
+c.append(rel("rel_runner_builder", "impl_runner", "cls_builder", ST_DEP, "build",
+             (0.5, 0.0), (0.5, 1.0)))
+c.append(rel("rel_runner_flasher", "impl_runner", "impl_flasher", ST_DEP, "flash",
+             (0.5, 1.0), (0.5, 0.0)))
+c.append(box(
+    "cls_note_wp4b", ST_NOTE,
+    "<b>WP4b</b> · PrepController delega en PrepRunner; PrepRunner construye con "
+    "BootImageBuilder y llama a DeviceFlasher, que usa MountManager, "
+    "PosixDeviceWriter e ImageVerifier. FakePrepController y FileDeviceWriter son "
+    "dobles de prueba.",
+    40, 1070, 1060, 70))
 pages.append(page("classes", "2 · Clases", c))
 
 # =============================================================== Página 3
 c = []
 lifelines = [
-    ("life_ui", "UI\nMainScene", 80),
-    ("life_ctrl", "PrepController", 340),
-    ("life_img", "BootImageBuilder", 600),
-    ("life_writer", "PosixDeviceWriter", 860),
-    ("life_dev", "Dispositivo\n/dev/sdX", 1120),
+    ("life_ui", "UI\nAppScene", 60),
+    ("life_ctrl", "PrepController", 280),
+    ("life_runner", "PrepRunner", 500),
+    ("life_flasher", "DeviceFlasher", 720),
+    ("life_img", "BootImageBuilder", 940),
+    ("life_writer", "PosixDeviceWriter", 1160),
+    ("life_dev", "Dispositivo\n/dev/sdX", 1380),
 ]
 for lid, label, x in lifelines:
     c.append(
@@ -433,18 +456,19 @@ def msg(cid, src, dst, label, y, ret=False):
 
 msgs = [
     ("sm1", "life_ui", "life_ctrl", "preparar(config)", 150, False),
-    ("sm2", "life_ctrl", "life_img", "build(spec)", 205, False),
-    ("sm2r", "life_img", "life_ctrl", "imagen + manifiesto", 245, True),
-    ("sm3", "life_ctrl", "life_writer", "desmontar(particiones)", 300, False),
-    ("sm3b", "life_ctrl", "life_writer", "open(device)", 340, False),
-    ("sm4", "life_ctrl", "life_writer", "write(regiones)", 385, False),
-    ("sm4d", "life_writer", "life_dev", "write()", 425, False),
-    ("sm5", "life_ctrl", "life_writer", "fsync + BLKFLSBUF", 470, False),
-    ("sm6", "life_ctrl", "life_writer", "verificar(manifiesto)", 515, False),
-    ("sm6d", "life_writer", "life_dev", "read()", 555, False),
-    ("sm7", "life_writer", "life_ctrl", "hashes del dispositivo", 610, True),
-    ("sm8", "life_ctrl", "life_ui", "PrepResult", 660, True),
-    ("sm9", "life_ui", "life_ctrl", "cancelar()", 710, False),
+    ("sm2", "life_ctrl", "life_runner", "run(config, cancel)", 200, False),
+    ("sm3", "life_runner", "life_img", "build(spec)", 250, False),
+    ("sm3r", "life_img", "life_runner", "imagen + manifiesto", 290, True),
+    ("sm4", "life_runner", "life_flasher", "flash(device, image, manifest)", 340, False),
+    ("sm4a", "life_flasher", "life_writer", "desmontar + open", 390, False),
+    ("sm4b", "life_writer", "life_dev", "write()", 430, False),
+    ("sm5", "life_flasher", "life_writer", "fsync + BLKFLSBUF", 475, False),
+    ("sm6", "life_flasher", "life_writer", "verificar(manifiesto)", 520, False),
+    ("sm6d", "life_writer", "life_dev", "read()", 560, False),
+    ("sm7", "life_flasher", "life_runner", "PrepResult", 610, True),
+    ("sm8", "life_runner", "life_ctrl", "PrepResult", 655, True),
+    ("sm9", "life_ctrl", "life_ui", "PrepResult", 695, True),
+    ("sm10", "life_ui", "life_ctrl", "cancelar()", 735, False),
 ]
 for m in msgs:
     c.append(msg(*m))

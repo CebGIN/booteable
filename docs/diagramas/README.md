@@ -6,7 +6,9 @@ para poder revisarlo en el repositorio.
 
 El estilo es monocromo: contenedores para los dos mundos y el medio, cajas de
 componente para los módulos, `swimlane` con compartimentos para las clases,
-`shape=umlLifeline` para la secuencia y flechas UML para las relaciones.
+`shape=umlLifeline` para la secuencia y flechas UML para las relaciones. La
+página de clases y la de secuencia incluyen el flujo real de WP4b
+(`PrepController` → `PrepRunner` → `DeviceFlasher`).
 
 | # | Página | Archivo |
 |---|---|---|
