@@ -14,6 +14,7 @@ void run_sysfs_source_tests();
 void run_mount_manager_tests();
 void run_device_writer_tests();
 void run_flash_tests();
+void run_ui_flow_tests();
 
 namespace booteable::test {
 int failures = 0;
@@ -37,6 +38,7 @@ int main() {
     run_mount_manager_tests();
     run_device_writer_tests();
     run_flash_tests();
+    run_ui_flow_tests();
 
     if (booteable::test::failures != 0) {
         std::cerr << booteable::test::failures << " comprobación(es) fallaron.\n";

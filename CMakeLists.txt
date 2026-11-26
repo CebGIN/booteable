@@ -129,7 +129,12 @@ booteable_warnings(booteable_core)
 
 # --- UI --------------------------------------------------------------------------
 add_library(booteable_ui STATIC
-    src/ui/MainScene.cpp)
+    src/ui/AppScene.cpp
+    src/ui/MainScene.cpp
+    src/ui/ConfirmDialog.cpp
+    src/ui/ProgressScene.cpp
+    src/ui/ResultScene.cpp
+    src/ui/UiFormat.cpp)
 target_link_libraries(booteable_ui PUBLIC
     booteable_core
     GuayabaTUIEngine::GuayabaTUIEngine)
@@ -163,9 +168,10 @@ add_executable(booteable_tests
     tests/test_sysfs_source.cpp
     tests/test_mount_manager.cpp
     tests/test_device_writer.cpp
-    tests/test_flash.cpp)
+    tests/test_flash.cpp
+    tests/test_ui_flow.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-target_link_libraries(booteable_tests PRIVATE booteable_core)
+target_link_libraries(booteable_tests PRIVATE booteable_core booteable_ui)
 booteable_warnings(booteable_tests)
 
 add_test(NAME unit COMMAND booteable_tests)

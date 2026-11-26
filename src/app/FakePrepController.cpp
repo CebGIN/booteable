@@ -116,6 +116,16 @@ bool FakePrepController::start(const PrepConfig& config) {
 
     running_ = true;
 
+    if (manual_steps_) {
+        progress_ = PrepProgress{};
+        progress_.stage = PrepStage::Building;
+        progress_.percent = 5;
+        progress_.bytes_total = config.device.size_bytes;
+        progress_.detail = "Construyendo la imagen";
+        result_ = PrepResult{};
+        return true;
+    }
+
     auto advance = [this](PrepStage stage, int percent, std::string detail) {
         progress_.stage = stage;
         progress_.percent = percent;
@@ -184,12 +194,21 @@ void FakePrepController::cancel() {
     }
     const PrepStage interrupted = progress_.stage;
     running_ = false;
-    progress_.stage = PrepStage::Cancelled;
+    const bool writing_started =
+        interrupted == PrepStage::Writing || interrupted == PrepStage::Syncing ||
+        interrupted == PrepStage::Verifying;
+    progress_.stage = writing_started ? PrepStage::Incomplete
+                                      : PrepStage::Cancelled;
     progress_.detail = "Cancelado por el usuario";
     result_ = PrepResult{};
-    result_.outcome = PrepOutcome::Cancelled;
+    result_.outcome = writing_started ? PrepOutcome::Incomplete
+                                      : PrepOutcome::Cancelled;
     result_.failed_stage = interrupted;
-    result_.message = "La preparación se canceló.";
+    result_.message = writing_started
+                          ? "La preparación se canceló; la USB puede quedar "
+                            "incompleta."
+                          : "La preparación se canceló.";
+    result_.bytes_written = progress_.bytes_done;
 }
 
 PrepProgress FakePrepController::progress() const {
@@ -210,6 +229,77 @@ void FakePrepController::fail_next(PrepOutcome outcome, PrepStage stage,
     fail_outcome_ = outcome;
     fail_stage_ = stage;
     fail_message_ = std::move(message);
+}
+
+void FakePrepController::set_manual_steps(bool enabled) {
+    manual_steps_ = enabled;
+}
+
+void FakePrepController::advance() {
+    if (!manual_steps_ || !running_) {
+        return;
+    }
+
+    switch (progress_.stage) {
+    case PrepStage::Building:
+        progress_.stage = PrepStage::Unmounting;
+        progress_.percent = 15;
+        progress_.detail = "Desmontando particiones";
+        break;
+    case PrepStage::Unmounting:
+        progress_.stage = PrepStage::Opening;
+        progress_.percent = 30;
+        progress_.detail = "Abriendo el dispositivo";
+        break;
+    case PrepStage::Opening:
+        progress_.stage = PrepStage::Writing;
+        progress_.percent = 55;
+        progress_.detail = "Escribiendo la imagen";
+        break;
+    case PrepStage::Writing:
+        progress_.stage = PrepStage::Syncing;
+        progress_.percent = 80;
+        progress_.bytes_done = progress_.bytes_total / 2;
+        progress_.detail = "Sincronizando";
+        break;
+    case PrepStage::Syncing:
+        progress_.stage = PrepStage::Verifying;
+        progress_.percent = 95;
+        progress_.bytes_done = progress_.bytes_total;
+        progress_.detail = "Verificando la imagen";
+        break;
+    case PrepStage::Verifying:
+        running_ = false;
+        progress_.stage = PrepStage::Done;
+        progress_.percent = 100;
+        progress_.bytes_done = progress_.bytes_total;
+        progress_.detail = "Imagen verificada";
+        result_ = PrepResult{};
+        result_.outcome = PrepOutcome::Verified;
+        result_.failed_stage = PrepStage::Idle;
+        result_.message = "La imagen se construyó, escribió y verificó (simulado).";
+        result_.image_sha256 = "fake-image-sha256";
+        result_.device_sha256 = "fake-image-sha256";
+        result_.bytes_written = progress_.bytes_total;
+        result_.synchronized = true;
+        result_.verified = true;
+        break;
+    default:
+        break;
+    }
+}
+
+void FakePrepController::set_can_write(bool allowed, std::string reason) {
+    can_write_ = allowed;
+    write_block_reason_ = std::move(reason);
+}
+
+bool FakePrepController::can_write() const {
+    return can_write_;
+}
+
+std::string FakePrepController::write_block_reason() const {
+    return write_block_reason_;
 }
 
 } // namespace booteable
