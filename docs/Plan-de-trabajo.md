@@ -83,8 +83,8 @@ Orden recomendado:
 Criterio de salida:
 
 - `cmake -S . -B build && cmake --build build` compila todos los targets.
-- `ctest --test-dir build` pasa `unit` y `qemu_boot` (o lo salta si faltan QEMU u
-  OVMF).
+- `ctest --test-dir build -j4` pasa las suites y `qemu_boot` (o lo salta si
+  faltan QEMU u OVMF).
 - `bootx64_efi` arranca en QEMU/OVMF y muestra `WP0-BOOT-OK` en serie.
 - `./build/booteable` abre una pantalla mínima con dispositivos simulados y sale
   con `F10`.
@@ -249,23 +249,25 @@ documentado.
 
 | Paso | Tarea |
 |---|---|
-| 1 | Integrar WP1–WP4 en `main` y comprobar que los contratos siguen congelados |
-| 2 | Completar suites de `Arquitectura.md` §14 y `ctest` sin root |
+| 1 | Integrar WP1–WP4 en `main` y auditar los contratos; registrar las extensiones aditivas de WP3/WP4 |
+| 2 | Completar suites de `Arquitectura.md` §14 y `ctest -j4` sin root |
 | 3 | Repetir build de imagen con el EFI final y verificar 512/4096 |
-| 4 | Probar QEMU con ventana y headless; capturar evidencia |
-| 5 | Preparar una USB de laboratorio y hacer el arranque físico (P9) |
+| 4 | Probar QEMU headless (y con ventana si hay escritorio); capturar evidencia en `docs/Evidencias.md` |
+| 5 | Preparar una USB de laboratorio y hacer el arranque físico (P9) con `docs/Prueba-fisica.md` |
 | 6 | Regenerar diagrama y vistas previas |
 | 7 | Actualizar README, AGENTS y Glosario con el estado real |
-| 8 | Ensayo de la demo: elegir USB, cancelar, preparar, verificar y arrancar |
+| 8 | Ensayo de la demo con `docs/Guion-demo.md` |
 
 Criterios de aceptación:
 
-- `ctest --output-on-failure` pasa en menos de 2 minutos en un equipo de 4
+- `ctest -j4 --output-on-failure` pasa en menos de 2 minutos en un equipo de 4
   núcleos.
 - La prueba QEMU se salta limpiamente si faltan OVMF/QEMU.
 - No quedan procesos, montajes ni descriptores colgados después de cerrar la TUI.
 - La USB arranca en el equipo de prueba y muestra el mensaje del grupo.
 - El README refleja comandos y rutas reales, no los planificados.
+- P9 queda registrada en `docs/Prueba-fisica.md`; si el hardware no está
+  disponible, se documenta como el único pendiente.
 
 ## 4. Orden de integración y dependencias
 

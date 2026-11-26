@@ -17,7 +17,8 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
 
 ## Estado
 
-**WP0, WP1, WP2, WP3a, WP3b, WP4a y WP4b implementados.**
+**WP0, WP1, WP2, WP3a, WP3b, WP4a, WP4b y WP5 implementados.** La prueba
+física P9 queda documentada y pendiente de ejecución en el laboratorio.
 
 - **WP1** entrega la aplicación EFI completa: mensaje fijo, colores, salida por
   consola y puerto serie, espera de tecla con límite, apagado limpio con
@@ -41,10 +42,15 @@ Proyecto de la materia Sistemas Operativos. Interfaz construida con
   sobre datos reales. La TUI usa el controlador real desde `main`; sin `root` se
   puede enumerar y exportar, pero la escritura queda deshabilitada con el mensaje
   de privilegios.
+- **WP5** cierra la integración: las suites se ejecutan por separado en CTest,
+  la validación aplica la misma reducción automática de ESP que el constructor
+  de imagen, las pruebas QEMU no comparten OVMF en paralelo y la evidencia,
+  el checklist físico y el guion de demo quedan en `docs/`.
 
-El flujo completo de la TUI sobre datos reales ya está implementado (WP4b); WP5
-es la integración y prueba final. La CLI sigue disponible para construir,
-verificar y escribir imágenes de forma headless.
+La CLI sigue disponible para construir, verificar y escribir imágenes de forma
+headless. El flujo completo de la TUI está probado contra `FakePrepController` y
+contra el controlador real con archivos regulares; la única prueba que necesita
+hardware es P9.
 
 La ruta elegida es **UEFI x86_64** con tabla **GPT** y una **ESP FAT32** que
 contiene `\EFI\BOOT\BOOTX64.EFI`. Es la ruta que el equipo de prueba admite y la
@@ -57,6 +63,9 @@ física.
 | [`docs/Arquitectura.md`](docs/Arquitectura.md) | ADRs, componentes, modelo, formato de imagen, seguridad, UI y pruebas |
 | [`docs/Glosario.md`](docs/Glosario.md) | Términos de UEFI, particiones, FAT32 y de la interfaz |
 | [`docs/Plan-de-trabajo.md`](docs/Plan-de-trabajo.md) | Paquetes de trabajo, responsabilidades y criterios de salida |
+| [`docs/Evidencias.md`](docs/Evidencias.md) | Resultados de build, CTest, imágenes y QEMU/OVMF |
+| [`docs/Prueba-fisica.md`](docs/Prueba-fisica.md) | Checklist de P9 en el equipo de laboratorio |
+| [`docs/Guion-demo.md`](docs/Guion-demo.md) | Guion de la demo y resultados esperados |
 | [`docs/diagrama.drawio`](docs/diagrama.drawio) | Componentes, clases, secuencia, estados y leyenda UML |
 
 ## Requisitos
@@ -77,7 +86,12 @@ física.
 git submodule update --init --recursive
 cmake -S . -B build
 cmake --build build
-ctest --test-dir build --output-on-failure
+
+# Presupuesto de WP5: reparte las suites entre cuatro núcleos.
+ctest --test-dir build -j4 --output-on-failure
+
+# Equivalente con target de CMake.
+cmake --build build --target check
 ```
 
 Targets:
@@ -90,6 +104,7 @@ Targets:
 | `booteable-image` | CLI headless para construir, verificar y escribir una imagen |
 | `bootx64_efi` | Aplicación EFI que arranca el firmware |
 | `booteable_tests` | Suites headless registradas en CTest |
+| `check` | Atajo que ejecuta `ctest -j4 --output-on-failure` |
 
 La aplicación EFI se compila con el *cross-compiler* de MinGW-w64
 (`-ffreestanding -nostdlib -Wl,--subsystem,10`) y se **incrusta** en el
@@ -102,9 +117,10 @@ escriben las regiones con contenido (MBR, GPT, ESP y GPT de respaldo). Preparar
 una USB de 64 GB no reserva 64 GB en RAM; la verificación compara únicamente esas
 regiones mediante un manifiesto de hashes.
 
-La etiqueta y el tamaño de la ESP se eligen en la TUI o por CLI. Por defecto son
-`BOOTEABLE` y 64 MiB con sectores de 512 bytes; con sectores de 4096 (4Kn) el
-mínimo y el valor por defecto suben a 260 MiB.
+La CLI permite elegir etiqueta y tamaño de ESP con `--label` y `--esp-mib`. La
+TUI usa `BOOTEABLE` y el tamaño automático: 64 MiB con sectores de 512 y 260 MiB
+con sectores de 4096 (4Kn). Si el destino es pequeño, la ESP automática se
+reduce al mayor tamaño que quepa sin bajar del mínimo FAT32.
 
 El profesor permite librerías y APIs del sistema operativo, pero las operaciones
 de detectar, particionar, formatear, escribir, sincronizar y verificar las hace
@@ -144,7 +160,7 @@ La CLI headless construye y verifica imágenes sin tocar hardware:
 
 `--size-mb` es el tamaño exacto del archivo. En una imagen de 64 MiB la ESP
 automática de 64 MiB no entra junto a la GPT, así que se reduce al mayor tamaño
-posible (unos 63 MiB, por encima del mínimo FAT32). Si se pide `--esp-mib`
+posible (unos 62 MiB, por encima del mínimo FAT32). Si se pide `--esp-mib`
 explícito y no entra, el build falla.
 
 Con la imagen verificada se puede preparar un destino. En una USB real hay que
@@ -193,20 +209,33 @@ preparador, incluida una imagen 4Kn:
   --sector-size 4096
 ```
 
+La salida esperada (`BOOTEABLE-BOOT-OK`) y los hashes de las imágenes de la
+última corrida están en [`docs/Evidencias.md`](docs/Evidencias.md).
+
 ## Pruebas
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -j4 --output-on-failure
+
+# Una suite concreta, sin pasar por CTest.
+./build/booteable_tests flash
+./build/booteable_tests prep_controller
 ```
 
-Las pruebas son headless, no requieren red, root ni una USB real:
+Las pruebas son headless, no requieren red, root ni una USB real. En un equipo
+de cuatro núcleos el conjunto completo tardó **62,0 s** en la última corrida y
+entre 69,6 y 93,5 s en corridas con más contención
+(ver [`docs/Evidencias.md`](docs/Evidencias.md)):
 
-- `unit`: dominio, controlador falso, CRC32/SHA-256, geometría, GPT, FAT32,
-  roundtrip de imagen y corrupción de cada región, enumeración sysfs con
-  fixtures, política de seguridad, montajes, escritor de archivos, flujo de
-  escritura (incluidas desconexión y cancelación), escenas de la TUI a 80×24 y
-  120×40, y `PrepController`/`PrepRunner` con hilos, privilegios, exportación y
-  cancelación.
+- `test_validation`, `test_fake_controller`, `test_core` (CRC32 y SHA-256),
+  `test_layout`, `test_gpt`, `test_fat32` e `test_image_roundtrip`: dominio,
+  geometría, GPT, FAT32 y corrupción de cada región.
+- `test_safety_policy`, `test_sysfs_source`, `test_mount_manager` y
+  `test_device_writer`: enumeración con fixtures, política, montajes y escritor.
+- `test_flash`: escritura y relectura en archivo regular, desconexión simulada,
+  cancelación, tamaños/sectores incompatibles y fallo de desmontaje.
+- `test_prep_controller` y `test_ui_flow`: hilos, privilegios, exportación,
+  cancelación, ausencia de descriptores colgados, escenas a 80×24 y 120×40.
 - `efi_binary`: cabecera PE32+, subsistema EFI, ausencia de imports de Windows y
   presencia del marcador.
 - `image_cli`: `build`/`verify` en 512 y 4096, tamaño exacto, etiqueta, detección
@@ -221,6 +250,9 @@ Las pruebas son headless, no requieren red, root ni una USB real:
 - `qemu_secure_boot`: prueba negativa con OVMF Secure Boot; exige que el binario
   sin firma sea bloqueado. También se salta si faltan las imágenes de OVMF con
   Secure Boot.
+
+Las cuatro pruebas QEMU comparten las variables de OVMF y el log serie, así que
+CTest las serializa con `RESOURCE_LOCK` aunque se ejecute con `-j4`.
 
 ## Secure Boot
 
@@ -242,10 +274,11 @@ Páginas:
 
 1. **Componentes**: los módulos agrupados por mundo, el medio USB como puente y
    la cadena firmware → servicios UEFI → programa propio.
-2. **Clases**: enums, structs del dominio, contratos e implementaciones, con
-   compartimentos y relaciones UML nativas.
+2. **Clases**: enums, structs del dominio, contratos e implementaciones de
+   WP3/WP4 (`PrepController`, `PrepRunner`, `DeviceFlasher`), con compartimentos
+   y relaciones UML nativas.
 3. **Secuencia**: enumerar, validar, confirmar, construir, escribir, sincronizar,
-   verificar y cancelar.
+   verificar y cancelar, pasando por `PrepRunner` y `DeviceFlasher`.
 4. **Estados**: la máquina `PrepStage` y los terminales de error y cancelación.
 5. **Leyenda**: relaciones UML, visibilidad y estereotipos.
 

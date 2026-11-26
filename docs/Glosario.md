@@ -97,7 +97,9 @@ prosa y las etiquetas de la interfaz, en español.
 | **SHA-256** | Función hash de 256 bits. Identifica la imagen y detecta cualquier diferencia en la relectura. |
 | **Hash de compilación** | Prefijo del hash del binario EFI; aparece en el mensaje de arranque y en la UI. |
 | **Prueba virtual** | Arranque de la imagen en QEMU con OVMF antes de usar hardware. |
-| **Prueba física** | Arranque real de la USB en un equipo UEFI. |
+| **Prueba física** | Arranque real de la USB en un equipo UEFI; es la prueba P9. |
+| **CTest / suite** | Ejecutor de pruebas de CMake. Cada archivo `tests/test_*.cpp` es una suite que se puede correr sola con `./build/booteable_tests <nombre>`. |
+| **Evidencia** | Salida reproducible de build, CTest, imágenes y QEMU guardada en `docs/Evidencias.md`. |
 
 ## 5. Etapas y resultados de la TUI
 
@@ -119,6 +121,16 @@ prosa y las etiquetas de la interfaz, en español.
 | `Cancelado` | Cancelación solicitada por el usuario. |
 | `Incompleto` | La operación no terminó o no se pudo verificar. |
 | `Falló` | Error con una causa concreta. |
+
+### Componentes del flujo (`app/`)
+
+| Término | Significado |
+|---|---|
+| **`PrepController`** | Implementación real de `IPrepController`; enumera, valida, arranca el hilo de preparación y publica progreso/resultado. |
+| **`PrepRunner`** | Construye la imagen, desmonta, escribe, sincroniza y verifica; `DeviceFlasher` concentra la escritura y la relectura. |
+| **`DeviceFlasher`** | Orquesta validar → desmontar → abrir → escribir → sync → verificar sobre un `IDeviceWriter`. |
+| **`FakePrepController`** | Doble de prueba que simula el flujo sin tocar hardware. |
+| **`FileDeviceWriter`** | Escritor de prueba sobre un archivo regular; no requiere root. |
 
 ### Resultados (`Resultado:`)
 
