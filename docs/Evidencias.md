@@ -123,6 +123,14 @@ Se regeneraron las cinco páginas. La página 2 incorpora `PrepRunner` y
 `DeviceFlasher`; la página 3 muestra el flujo
 `AppScene → PrepController → PrepRunner → DeviceFlasher → PosixDeviceWriter`.
 
+## Actualización WP6: escena declarativa
+
+La UI pasó a `assets/ui/booteable.gscene` y `assets/ui/booteable.gtheme`,
+incrustados con `tools/embed-ui.py`. La corrida posterior con
+`ctest --test-dir build -j4 --output-on-failure` dio **22/22 pruebas aprobadas**
+en 70,18 s (63,57 s en una corrida previa), incluida la nueva suite `ui_scene` y
+las pruebas de modalidad, persistencia del divisor y estados de botón.
+
 ## Prueba física P9
 
 Pendiente de ejecución en el equipo de laboratorio. El procedimiento y los

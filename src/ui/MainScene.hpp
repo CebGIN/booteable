@@ -36,8 +36,10 @@ struct MainSceneWidgets {
 
 // Panel principal: lista de USB y detalles del destino elegido. La disposición
 // en una o dos columnas la decide SplitContainer según el ancho de la pantalla.
-MainSceneWidgets build_main_scene(guayaba::NodeRef<guayaba::Control> parent,
-                                  AppScene& app);
+// Los nodos vienen de assets/ui/booteable.gscene; esta capa solo los resuelve,
+// conecta sus señales y los refresca.
+void bind_main_scene(guayaba::NodeRef<guayaba::Control> content,
+                     MainSceneWidgets& widgets, AppScene& app);
 
 void refresh_main_scene(MainSceneWidgets& widgets,
                         const std::vector<DeviceInfo>& devices,

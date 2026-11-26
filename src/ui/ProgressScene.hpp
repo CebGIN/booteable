@@ -22,12 +22,13 @@ struct ProgressSceneWidgets {
     guayaba::NodeRef<guayaba::Label> status;
 };
 
-ProgressSceneWidgets build_progress_scene(
-    guayaba::NodeRef<guayaba::Control> parent, AppScene& app);
+void bind_progress_scene(guayaba::NodeRef<guayaba::Control> content,
+                         ProgressSceneWidgets& widgets, AppScene& app);
 
 void refresh_progress_scene(ProgressSceneWidgets& widgets,
                             const DeviceInfo& device,
-                            const PrepProgress& progress);
+                            const PrepProgress& progress,
+                            const std::string& notice = {});
 
 } // namespace booteable::ui
 

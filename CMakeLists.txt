@@ -129,6 +129,31 @@ target_include_directories(booteable_core PUBLIC
     "${GENERATED_DIR}")
 booteable_warnings(booteable_core)
 
+# --- UI declarativa --------------------------------------------------------------
+# La estructura y el tema viven en assets/ui/ y se incrustan como texto para que
+# el binario no dependa del directorio de trabajo ni de archivos en runtime.
+set(UI_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui")
+set(UI_SCENE_FILE "${UI_ASSETS_DIR}/booteable.gscene")
+set(UI_THEME_FILE "${UI_ASSETS_DIR}/booteable.gtheme")
+set(UI_ASSETS_HPP "${GENERATED_DIR}/EmbeddedUiAssets.hpp")
+set(UI_ASSETS_CPP "${GENERATED_DIR}/EmbeddedUiAssets.cpp")
+
+add_custom_command(
+    OUTPUT "${UI_ASSETS_HPP}" "${UI_ASSETS_CPP}"
+    COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed-ui.py"
+            --scene "${UI_SCENE_FILE}"
+            --theme "${UI_THEME_FILE}"
+            --output-dir "${GENERATED_DIR}"
+    DEPENDS
+        "${UI_SCENE_FILE}"
+        "${UI_THEME_FILE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed-ui.py"
+    COMMENT "Incrustando la escena y el tema de la UI"
+    VERBATIM)
+
+add_custom_target(booteable_ui_assets DEPENDS "${UI_ASSETS_CPP}")
+
 # --- UI --------------------------------------------------------------------------
 add_library(booteable_ui STATIC
     src/ui/AppScene.cpp
@@ -136,10 +161,14 @@ add_library(booteable_ui STATIC
     src/ui/ConfirmDialog.cpp
     src/ui/ProgressScene.cpp
     src/ui/ResultScene.cpp
-    src/ui/UiFormat.cpp)
+    src/ui/UiAssets.cpp
+    src/ui/UiFormat.cpp
+    "${UI_ASSETS_CPP}")
+add_dependencies(booteable_ui booteable_ui_assets)
 target_link_libraries(booteable_ui PUBLIC
     booteable_core
     GuayabaTUIEngine::GuayabaTUIEngine)
+target_include_directories(booteable_ui PRIVATE "${GENERATED_DIR}")
 booteable_warnings(booteable_ui)
 
 # --- Aplicación TUI --------------------------------------------------------------
@@ -172,7 +201,8 @@ add_executable(booteable_tests
     tests/test_device_writer.cpp
     tests/test_flash.cpp
     tests/test_prep_controller.cpp
-    tests/test_ui_flow.cpp)
+    tests/test_ui_flow.cpp
+    tests/test_ui_scene.cpp)
 target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_link_libraries(booteable_tests PRIVATE booteable_core booteable_ui)
 booteable_warnings(booteable_tests)
@@ -193,7 +223,8 @@ set(BOOTEABLE_TEST_SUITES
     device_writer
     flash
     prep_controller
-    ui_flow)
+    ui_flow
+    ui_scene)
 
 foreach(suite IN LISTS BOOTEABLE_TEST_SUITES)
     add_test(NAME test_${suite} COMMAND booteable_tests ${suite})

@@ -25,6 +25,13 @@ public:
     bool running() const override;
     bool can_write() const override;
     std::string write_block_reason() const override;
+    bool export_default_image(PrepConfig& config, std::string& image_path,
+                              std::string& error) override;
+
+    // Último config recibido por export_default_image(); permite comprobar que
+    // la UI exporta el dispositivo seleccionado sin tocar el disco.
+    const PrepConfig& last_export() const { return last_export_; }
+    bool has_export() const { return has_export_; }
 
     // Ayuda para las pruebas: simula un error en la etapa indicada.
     void fail_next(PrepOutcome outcome, PrepStage stage, std::string message);
@@ -50,6 +57,8 @@ private:
     bool manual_steps_ = false;
     bool can_write_ = true;
     std::string write_block_reason_;
+    PrepConfig last_export_;
+    bool has_export_ = false;
 };
 
 } // namespace booteable

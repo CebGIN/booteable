@@ -21,8 +21,8 @@ struct ResultSceneWidgets {
     guayaba::NodeRef<guayaba::Button> quit;
 };
 
-ResultSceneWidgets build_result_scene(
-    guayaba::NodeRef<guayaba::Control> parent, AppScene& app);
+void bind_result_scene(guayaba::NodeRef<guayaba::Control> content,
+                       ResultSceneWidgets& widgets, AppScene& app);
 
 void refresh_result_scene(ResultSceneWidgets& widgets, const DeviceInfo& device,
                           const PrepResult& result);

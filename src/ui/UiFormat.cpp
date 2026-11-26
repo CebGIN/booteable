@@ -50,6 +50,22 @@ int stage_order(PrepStage stage) {
 
 } // namespace
 
+std::string status_color(StatusLevel level) {
+    switch (level) {
+    case StatusLevel::Hint:
+        return "BRIGHT_BLACK";
+    case StatusLevel::Info:
+        return "BRIGHT_WHITE";
+    case StatusLevel::Success:
+        return "BRIGHT_GREEN";
+    case StatusLevel::Warning:
+        return "BRIGHT_YELLOW";
+    case StatusLevel::Error:
+        return "BRIGHT_RED";
+    }
+    return "BRIGHT_BLACK";
+}
+
 std::string format_bytes(std::uint64_t bytes) {
     if (bytes >= kGib) {
         return with_unit(static_cast<double>(bytes) / static_cast<double>(kGib),

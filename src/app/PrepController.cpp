@@ -1,6 +1,9 @@
 #include "app/PrepController.hpp"
 
 #include <exception>
+#include <filesystem>
+#include <string>
+#include <system_error>
 #include <utility>
 
 #include <unistd.h>
@@ -232,6 +235,28 @@ bool PrepController::export_image(const PrepConfig& config, std::string& error) 
         return false;
     }
     return true;
+}
+
+bool PrepController::export_default_image(PrepConfig& config,
+                                          std::string& image_path,
+                                          std::string& error) {
+    std::error_code code;
+    const std::filesystem::path directory = "build";
+    std::filesystem::create_directories(directory, code);
+    if (code) {
+        error = "No se pudo crear el directorio de exportación: " + code.message();
+        return false;
+    }
+
+    std::string name = "booteable-export";
+    const std::size_t slash = config.device.path.find_last_of('/');
+    if (slash != std::string::npos && slash + 1 < config.device.path.size()) {
+        name += "-" + config.device.path.substr(slash + 1);
+    }
+
+    image_path = (directory / (name + ".img")).string();
+    config.image_path = image_path;
+    return export_image(config, error);
 }
 
 } // namespace booteable

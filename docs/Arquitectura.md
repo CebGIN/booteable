@@ -768,6 +768,12 @@ coinciden con el dispositivo; si no, rechaza y sugiere `--sector-size`/`--size-m
 
 ### 12.1 Escenas
 
+La estructura estática de los cuatro paneles y el tema viven en
+`assets/ui/booteable.gscene` y `assets/ui/booteable.gtheme`. `AppScene` los carga
+incrustados en el binario (`tools/embed-ui.py`), usa `AdaptiveScreen` como host
+responsive y resuelve los widgets por ruta. Los textos dinámicos, las señales y
+el refresco con `IPrepController` siguen en C++.
+
 `MainScene` (selección y configuración):
 
 ```text
@@ -826,13 +832,18 @@ Secure Boot:     debe estar desactivado en el equipo de prueba
 ### 12.2 Reglas de UI
 
 - La UI solo incluye `app/IPrepController.hpp` y `src/domain/Types.hpp`.
+- La estructura y el tema son declarativos (`assets/ui/booteable.gscene` y
+  `booteable.gtheme`); el comportamiento y los bindings de señales quedan en
+  `src/ui/`.
 - `MainScene` refresca con `F5` y al recibir el evento de cambio de dispositivo;
   no usa sondeo continuo en el panel de selección.
-- Durante la preparación, `ProgressScene` consulta `progress()` desde un
-  `Timer` de Guayaba cada 100 ms; el hilo de escritura solo actualiza un
+- Durante la preparación, `ProgressScene` consulta `progress()` desde el
+  `on_process` de `AppScript` cada 100 ms; el hilo de escritura solo actualiza un
   `std::atomic` y un mutex corto.
-- `Esc` cancela el diálogo, no la preparación en curso; en `ProgressScene`
-  `Esc` equivale a `Cancelar` y pide confirmación.
+- El diálogo de confirmación es modal: oculta el panel principal y trabaja sobre
+  una instantánea del dispositivo confirmado, que se revalida antes de escribir.
+- `Esc` cierra el diálogo; en `ProgressScene` `Esc` equivale a `Cancelar` y el
+  resultado incompleto se muestra en `ResultScene`.
 - A 80×24 los paneles se apilan; a 120×40 se usa el layout de dos columnas.
 - Los mensajes de error muestran la etapa y el `errno` traducido, nunca un
   "éxito" parcial.

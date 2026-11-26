@@ -32,6 +32,15 @@ public:
         error = "El controlador no permite exportar imágenes.";
         return false;
     }
+
+    // Exportación con la política de ruta del controlador: la UI no arma rutas
+    // ni crea directorios. `image_path` recibe la ruta efectiva.
+    virtual bool export_default_image(PrepConfig&, std::string& image_path,
+                                      std::string& error) {
+        image_path.clear();
+        error = "El controlador no permite exportar imágenes.";
+        return false;
+    }
 };
 
 } // namespace booteable

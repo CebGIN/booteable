@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include "ui/MainScene.hpp"
 #include "ui/ProgressScene.hpp"
 #include "ui/ResultScene.hpp"
+#include "ui/UiFormat.hpp"
 
 namespace booteable::ui {
 
@@ -34,6 +36,7 @@ struct UiState {
     bool can_write = true;
     std::string write_reason;
     std::string status;
+    StatusLevel status_level = StatusLevel::Hint;
     SafetyReport safety;
     PrepProgress progress;
     PrepResult result;
@@ -88,20 +91,28 @@ public:
 
 private:
     void show(UiScreen screen);
+    void set_status(std::string text, StatusLevel level);
     void refresh_main();
     void refresh_confirm();
     void refresh_progress();
     void refresh_result();
     void focus_current_screen();
     const DeviceInfo* selected_device() const;
-    PrepConfig config_for_selected(bool confirmed) const;
+    PrepConfig config_for(const DeviceInfo& device, bool confirmed) const;
 
     IPrepController& controller_;
     UiState state_;
     std::string confirm_status_;
     std::vector<DeviceInfo> devices_;
 
-    guayaba::Node* root_ = nullptr;
+    // Dispositivo confirmado al abrir el diálogo. El flujo de escritura usa
+    // esta instantánea y no la selección actual, que no debe cambiar mientras
+    // el diálogo está abierto.
+    std::optional<DeviceInfo> target_;
+    std::string progress_notice_;
+    int progress_notice_ticks_ = 0;
+
+    std::unique_ptr<guayaba::Theme> theme_;
 
     MainSceneWidgets main_;
     ConfirmDialogWidgets confirm_;

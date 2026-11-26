@@ -302,4 +302,21 @@ std::string FakePrepController::write_block_reason() const {
     return write_block_reason_;
 }
 
+bool FakePrepController::export_default_image(PrepConfig& config,
+                                              std::string& image_path,
+                                              std::string& error) {
+    std::string name = "booteable-export";
+    const std::size_t slash = config.device.path.find_last_of('/');
+    if (slash != std::string::npos && slash + 1 < config.device.path.size()) {
+        name += "-" + config.device.path.substr(slash + 1);
+    }
+
+    image_path = "build/" + name + ".img";
+    config.image_path = image_path;
+    last_export_ = config;
+    has_export_ = true;
+    error.clear();
+    return true;
+}
+
 } // namespace booteable

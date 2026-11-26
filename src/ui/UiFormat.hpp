@@ -10,6 +10,19 @@
 
 namespace booteable::ui {
 
+// Severidad del mensaje de estado de la pantalla principal. El color no puede
+// depender solo del texto: un error y una pista se ven distinto.
+enum class StatusLevel {
+    Hint,
+    Info,
+    Success,
+    Warning,
+    Error,
+};
+
+// Color del terminal (nombre aceptado por Guayaba) para una severidad.
+std::string status_color(StatusLevel level);
+
 // Formato de tamaños para la TUI: unidades binarias con un decimal a partir de
 // MiB, y bytes exactos por debajo. Nunca imprime "0 B" para un valor no nulo.
 std::string format_bytes(std::uint64_t bytes);

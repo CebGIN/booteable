@@ -22,8 +22,8 @@ struct ConfirmDialogWidgets {
     guayaba::NodeRef<guayaba::Label> status;
 };
 
-ConfirmDialogWidgets build_confirm_dialog(
-    guayaba::NodeRef<guayaba::Control> parent, AppScene& app);
+void bind_confirm_dialog(guayaba::NodeRef<guayaba::Control> content,
+                         ConfirmDialogWidgets& widgets, AppScene& app);
 
 void refresh_confirm_dialog(ConfirmDialogWidgets& widgets,
                             const DeviceInfo& device, bool confirmed,

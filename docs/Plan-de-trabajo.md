@@ -69,8 +69,9 @@ Entregables:
   `build/generated/EmbeddedBootImage.cpp` con su SHA-256, a partir del EFI de
   WP0. Así WP2 puede construir imágenes antes de que exista la versión final de
   WP1.
-- Submódulo `external/GuayabaTUIEngine` fijado en `v1.3.0-alpha` y una escena
-  mínima que abra y cierre.
+- Submódulo `external/GuayabaTUIEngine` fijado en `v1.3.0-alpha` más el commit
+  `9eaf8bb` (formato declarativo de escena/tema) y una escena mínima que abra y
+  cierre.
 
 Orden recomendado:
 
@@ -200,10 +201,12 @@ Criterios de aceptación:
 **Depende de:** WP0.
 **Consume:** `IPrepController`, `FakePrepController`, `SafetyReport`,
 `PrepProgress`, `PrepResult`.
-**Entrega:** escenas navegables sin tocar hardware.
+**Entrega:** escenas navegables sin tocar hardware, descritas en
+`assets/ui/booteable.gscene` y `booteable.gtheme`.
 
 | Paso | Tarea | Archivos |
 |---|---|---|
+| 0 | Escena y tema declarativos, incrustados en el binario | `assets/ui/*`, `tools/embed-ui.py` |
 | 1 | `MainScene` con lista y detalles | `src/ui/MainScene.*` |
 | 2 | `ConfirmDialog` con casilla de advertencia + `Enter` | `src/ui/ConfirmDialog.*` |
 | 3 | `ProgressScene` con etapas, barra y cancelar | `src/ui/ProgressScene.*` |
@@ -218,6 +221,8 @@ Criterios de aceptación:
   `IPrepController`.
 - Con el fake se recorren selección, confirmación, progreso, cancelación y
   resultado.
+- La escena y el tema se validan en la suite `ui_scene` y no dependen de rutas
+  de archivos en runtime.
 
 ### WP4b · Controlador, runner e integración real
 

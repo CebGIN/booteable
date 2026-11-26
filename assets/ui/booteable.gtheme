@@ -1,0 +1,155 @@
+# Tema de la TUI de booteable.
+#
+# Los estilos canónicos son los que leen los controles de Guayaba; los estilos
+# con nombre (confirm_panel, button.danger.*, ...) se referencian desde
+# booteable.gscene. El formato no conserva comentarios al reescribir, pero este
+# archivo se mantiene a mano.
+
+format = 1
+name = "Booteable"
+
+style "panel" {
+    background = "BLACK"
+    margin = [1, 0, 1, 0]
+}
+
+style "confirm_panel" {
+    background = "BLACK"
+    border = "BRIGHT_RED"
+    border_style = "double"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "progress_panel" {
+    background = "BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "rounded"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "result_panel" {
+    background = "BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "double"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.normal" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.hover" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.pressed" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.disabled" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.danger.normal" {
+    border = "BRIGHT_RED"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.danger.hover" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_RED"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.danger.pressed" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_RED"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.danger.disabled" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.warning.normal" {
+    border = "BRIGHT_YELLOW"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.warning.hover" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_YELLOW"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.warning.pressed" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_YELLOW"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.warning.disabled" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "list_view" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "progress_bar" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "split_container.divider" {
+    background = "BRIGHT_BLACK"
+}
+
+color "text.primary" = "WHITE"
+color "text.secondary" = "BRIGHT_BLACK"
+color "text.disabled" = "BRIGHT_BLACK"
+color "selection.background" = "BRIGHT_BLUE"
+color "selection.text" = "BRIGHT_WHITE"
+color "progress_bar.fill" = "BRIGHT_CYAN"
+color "progress_bar.background" = "BLACK"
+color "progress_bar.text" = "WHITE"

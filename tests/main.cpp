@@ -18,6 +18,7 @@ void run_device_writer_tests();
 void run_flash_tests();
 void run_prep_controller_tests();
 void run_ui_flow_tests();
+void run_ui_scene_tests();
 
 namespace booteable::test {
 int failures = 0;
@@ -50,6 +51,7 @@ const Suite kSuites[] = {
     {"flash", &run_flash_tests},
     {"prep_controller", &run_prep_controller_tests},
     {"ui_flow", &run_ui_flow_tests},
+    {"ui_scene", &run_ui_scene_tests},
 };
 
 void print_suites() {
