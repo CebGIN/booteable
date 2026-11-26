@@ -71,6 +71,7 @@ public:
 
     // Acciones disparadas por la UI o por las pruebas.
     void request_prepare();
+    void advance_step();
     void request_export();
     void request_export_standard();
     void request_export_selected();
@@ -89,6 +90,7 @@ public:
 
     const UiState& state() const { return state_; }
     IPrepController& controller() { return controller_; }
+    bool result_ready() const { return result_ready_; }
 
     // Accesos de solo lectura para las pruebas headless.
     guayaba::NodeRef<guayaba::ListView> device_list() const;
@@ -105,6 +107,7 @@ public:
     guayaba::NodeRef<guayaba::Label> step_title() const;
     guayaba::NodeRef<guayaba::Label> step_status() const;
     guayaba::NodeRef<guayaba::Label> step_log() const;
+    guayaba::NodeRef<guayaba::Button> continue_button() const;
     guayaba::NodeRef<guayaba::Button> cancel_button() const;
     guayaba::NodeRef<guayaba::CheckBox> warning_checkbox() const;
     guayaba::NodeRef<guayaba::ProgressBar> progress_bar() const;
@@ -148,6 +151,10 @@ private:
     void finish_transition();
     void sync_visibility();
     void focus_export_step(int delta);
+    bool image_ready() const;
+    bool is_step_done(WizardStep step) const;
+    void advance_furthest(WizardStep step);
+    void refresh_step_widget(StepSceneWidgets& widgets, WizardStep step);
     guayaba::NodeRef<guayaba::Control> panel_for(UiScreen screen) const;
     StepSceneWidgets& active_step_widgets();
     const StepSceneWidgets& active_step_widgets() const;
@@ -186,6 +193,8 @@ private:
 
     int active_step_card_ = 0;
     WizardStep wizard_step_ = WizardStep::Detect;
+    WizardStep furthest_step_ = WizardStep::Detect;
+    bool result_ready_ = false;
     bool seen_building_ = false;
     double building_elapsed_ = 0.0;
     PrepStage last_stage_ = PrepStage::Idle;

@@ -21,9 +21,15 @@ class IPrepRunner {
 public:
     virtual ~IPrepRunner() = default;
 
+    // Devuelve true para continuar con la escritura y false si se canceló
+    // mientras esperaba. El runner la invoca después de construir y verificar la
+    // imagen, antes de abrir la USB.
+    using WaitBeforeWrite = std::function<bool()>;
+
     virtual PrepResult run(
         const PrepConfig& config, const std::atomic_bool& cancel,
-        const std::function<void(const PrepProgress&)>& progress) = 0;
+        const std::function<void(const PrepProgress&)>& progress,
+        WaitBeforeWrite wait_before_write = {}) = 0;
 
     virtual ImageBuildResult build_image(const PrepConfig& config,
                                          const std::filesystem::path& output) = 0;
@@ -43,7 +49,8 @@ public:
 
     PrepResult run(
         const PrepConfig& config, const std::atomic_bool& cancel,
-        const std::function<void(const PrepProgress&)>& progress) override;
+        const std::function<void(const PrepProgress&)>& progress,
+        WaitBeforeWrite wait_before_write = {}) override;
 
     ImageBuildResult build_image(const PrepConfig& config,
                                  const std::filesystem::path& output) override;

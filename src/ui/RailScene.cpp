@@ -122,7 +122,8 @@ void refresh_rail_scene(RailSceneWidgets& widgets, const RailSceneState& state) 
     widgets.back->set_text(expanded ? "[ Volver ]" : "[V]");
     widgets.cancel->set_text(expanded ? "[ Cancelar ]" : "[X]");
 
-    widgets.exit->set_disabled(progress);
+    widgets.cancel->set_disabled(!state.preparation_running);
+    widgets.exit->set_disabled(progress && state.preparation_running);
 
     widgets.export_64->set_text("[ 64 MiB ]");
     if (state.has_device) {

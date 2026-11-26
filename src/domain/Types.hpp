@@ -157,6 +157,9 @@ struct PrepProgress {
     std::uint64_t bytes_total = 0;
     int percent = 0;
     std::string detail;
+    // Pausa real después de construir/verificar la imagen y antes de abrir la
+    // USB. La UI la usa para mostrar "Imagen lista" y esperar Confirmar.
+    bool waiting = false;
 };
 
 struct PrepResult {

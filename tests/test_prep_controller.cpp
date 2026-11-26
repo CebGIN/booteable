@@ -77,13 +77,25 @@ public:
     bool wait_for_cancel = false;
     bool throw_now = false;
     bool build_ok = true;
+    bool test_wait_before_write = false;
     std::optional<PrepConfig> last_build;
 
     PrepResult run(const PrepConfig& config, const std::atomic_bool& cancel,
-                   const std::function<void(const PrepProgress&)>& progress) override {
+                   const std::function<void(const PrepProgress&)>& progress,
+                   booteable::IPrepRunner::WaitBeforeWrite wait_before_write =
+                       {}) override {
         ++runs;
         if (throw_now) {
             throw std::runtime_error("fallo simulado del runner");
+        }
+
+        if (test_wait_before_write && wait_before_write &&
+            !wait_before_write()) {
+            PrepResult cancelled;
+            cancelled.outcome = PrepOutcome::Cancelled;
+            cancelled.failed_stage = PrepStage::Building;
+            cancelled.message = "Cancelado antes de escribir.";
+            return cancelled;
         }
 
         if (progress) {
@@ -240,6 +252,42 @@ void test_export_standard_geometry() {
     CHECK_EQ(config.image_path, image_path);
 }
 
+void test_controller_pauses_before_write() {
+    FakeSource source;
+    FakeRunner runner;
+    runner.test_wait_before_write = true;
+    PrepController controller(source, runner, {}, [] { return true; });
+
+    CHECK(controller.start(valid_config()));
+    CHECK(wait_for([&controller] {
+        return controller.waiting_for_continue();
+    }));
+    CHECK(controller.running());
+    CHECK(controller.progress().waiting);
+    CHECK_EQ(controller.progress().stage, PrepStage::Building);
+
+    controller.continue_preparation();
+    CHECK(wait_for([&controller] { return !controller.running(); }));
+    CHECK(controller.result().outcome == PrepOutcome::Verified);
+}
+
+void test_controller_cancel_while_waiting() {
+    FakeSource source;
+    FakeRunner runner;
+    runner.test_wait_before_write = true;
+    PrepController controller(source, runner, {}, [] { return true; });
+
+    CHECK(controller.start(valid_config()));
+    CHECK(wait_for([&controller] {
+        return controller.waiting_for_continue();
+    }));
+
+    controller.cancel();
+    CHECK(wait_for([&controller] { return !controller.running(); }));
+    CHECK(controller.result().outcome == PrepOutcome::Cancelled);
+    CHECK_EQ(controller.result().failed_stage, PrepStage::Building);
+}
+
 void test_cancel_during_write() {
     FakeSource source;
     FakeRunner runner;
@@ -286,8 +334,13 @@ void test_ui_with_real_controller() {
 
     CHECK(wait_for([&app] {
         app.tick();
-        return app.state().screen == UiScreen::Result;
+        return app.result_ready();
     }));
+    while (app.state().screen == UiScreen::Progress) {
+        app.advance_step();
+        app.settle_transition();
+    }
+    CHECK(app.state().screen == UiScreen::Result);
     CHECK(app.state().result.outcome == PrepOutcome::Verified);
     CHECK_EQ(app.progress_bar()->get_value(), 100.0);
     CHECK_EQ(app.result_outcome()->get_text(), std::string("VERIFICADO"));
@@ -398,6 +451,8 @@ void run_prep_controller_tests() {
     test_permission_denied();
     test_export_image();
     test_export_standard_geometry();
+    test_controller_pauses_before_write();
+    test_controller_cancel_while_waiting();
     test_cancel_during_write();
     test_runner_exception_does_not_crash();
     test_ui_with_real_controller();

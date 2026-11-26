@@ -119,9 +119,13 @@ bool FakePrepController::start(const PrepConfig& config) {
     if (manual_steps_) {
         progress_ = PrepProgress{};
         progress_.stage = PrepStage::Building;
-        progress_.percent = 5;
+        progress_.percent = wait_before_write_ ? 15 : 5;
         progress_.bytes_total = config.device.size_bytes;
-        progress_.detail = "Construyendo la imagen";
+        progress_.detail = wait_before_write_
+                               ? "Imagen lista; esperando Confirmar"
+                               : "Construyendo la imagen";
+        progress_.waiting = wait_before_write_;
+        waiting_ = wait_before_write_;
         result_ = PrepResult{};
         return true;
     }
@@ -194,6 +198,8 @@ void FakePrepController::cancel() {
     }
     const PrepStage interrupted = progress_.stage;
     running_ = false;
+    waiting_ = false;
+    progress_.waiting = false;
     const bool writing_started =
         interrupted == PrepStage::Writing || interrupted == PrepStage::Syncing ||
         interrupted == PrepStage::Verifying;
@@ -235,8 +241,25 @@ void FakePrepController::set_manual_steps(bool enabled) {
     manual_steps_ = enabled;
 }
 
+void FakePrepController::set_wait_before_write(bool enabled) {
+    wait_before_write_ = enabled;
+}
+
+bool FakePrepController::waiting_for_continue() const {
+    return waiting_;
+}
+
+void FakePrepController::continue_preparation() {
+    if (!waiting_) {
+        return;
+    }
+    waiting_ = false;
+    progress_.waiting = false;
+    progress_.detail = "Continuando con la escritura";
+}
+
 void FakePrepController::advance() {
-    if (!manual_steps_ || !running_) {
+    if (!manual_steps_ || !running_ || waiting_) {
         return;
     }
 

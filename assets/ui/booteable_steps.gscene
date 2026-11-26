@@ -105,7 +105,18 @@ Control "steps" {
 
             HBox "step_a_buttons" {
                 custom_minimum_size = [0, 3]
+                anchor_right = 1.0
+                grow_x = "both"
                 separation = 2
+
+                Button "step_a_continue" {
+                    text = "[ Continuar ]"
+                    custom_minimum_size = [16, 3]
+                    style.normal = "button.primary.normal"
+                    style.hover = "button.primary.hover"
+                    style.pressed = "button.primary.pressed"
+                    style.disabled = "button.primary.disabled"
+                }
 
                 Button "step_a_cancel" {
                     text = "[ Esc · Cancelar ]"
@@ -212,7 +223,18 @@ Control "steps" {
 
             HBox "step_b_buttons" {
                 custom_minimum_size = [0, 3]
+                anchor_right = 1.0
+                grow_x = "both"
                 separation = 2
+
+                Button "step_b_continue" {
+                    text = "[ Continuar ]"
+                    custom_minimum_size = [16, 3]
+                    style.normal = "button.primary.normal"
+                    style.hover = "button.primary.hover"
+                    style.pressed = "button.primary.pressed"
+                    style.disabled = "button.primary.disabled"
+                }
 
                 Button "step_b_cancel" {
                     text = "[ Esc · Cancelar ]"

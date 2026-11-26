@@ -786,9 +786,16 @@ cada root con ese tema y los injerta bajo los slots. Los textos dinámicos, las
 señales, las transiciones y el refresco con `IPrepController` siguen en C++.
 
 El wizard tiene seis pasos: **Detectar → Particionar → Formatear → Escribir →
-Sincronizar → Verificar**. No hay “Siguiente” entre los pasos 2 y 6: la
-preparación es una sola operación atómica y pausarla dejaría el medio
-inconsistente. El único paso interactivo es el 1.
+Sincronizar → Verificar**. El paso 1 es la selección; los pasos 2–6 se recorren
+con `[ Continuar ]`, que solo se habilita cuando la etapa real terminó.
+
+Hay una única pausa real: después de construir y verificar la imagen, antes de
+abrir la USB. Ahí el worker espera a que el usuario pulse
+`[ Continuar y escribir ]`; la USB sigue intacta y cancelar no deja nada a
+medias. La escritura, el `fsync` y la verificación no se pausan: son una sola
+unidad de durabilidad. La UI los muestra en vivo y, si terminan rápido, el
+usuario puede leerlos igual con `[ Continuar ]`. Un fallo o una cancelación salta
+directo al resultado.
 
 `MainScene` (paso 1, rail plegado):
 
@@ -847,15 +854,22 @@ tenga un hueco:
 │ │ [##>---]                                                               │
 │ │ Validando destino e imagen                                             │
 │ │ Construyendo la imagen…                                                │
-│ │ [ Esc · Cancelar ]                                                     │
+│ │ [ Continuar ]   [ Esc · Cancelar ]                                     │
 └─┴────────────────────────────────────────────────────────────────────────┘
 ```
+
+Cuando la imagen está lista y el worker espera, la tarjeta de Formatear muestra
+`Imagen lista; esperando Confirmar` y el botón cambia a
+`[ Continuar y escribir ]`. Ese es el único punto donde la UI detiene el
+pipeline. Al final, la tarjeta de Verificar cambia a `[ Ver resultado ]`.
 
 Los pasos 2 (Particionar) y 3 (Formatear) no tienen señal propia en el
 controlador: `Building` cubre ambos. La UI los separa con un temporizador de
 ~600 ms, pero cualquier etapa real (`Writing`, `Syncing`, `Verifying`) pisa el
 temporizador de inmediato y un paso nunca se marca como hecho antes de que
-`Building` termine. Si el build es más rápido que el umbral, Formatear se salta.
+`Building` termine. Si el build es más rápido que el umbral, Formatear se salta
+solo como temporizador; el usuario lo lee igual porque la tarjeta no avanza
+sola.
 
 `ResultScene`: resultado (`VERIFICADO` en verde, `INCOMPLETO` en ámbar,
 `FALLÓ` en rojo), paso y etapa, mensaje, SHA-256 de imagen y dispositivo, y las
@@ -879,11 +893,20 @@ instrucciones de prueba. Si falla `Building`, el resultado informa
   revalidada antes de escribir.
 - `Esc` vuelve de la confirmación y del resultado; en los pasos equivale a
   `Cancelar`; en el paso 1 pliega el rail y después sale. `F10` sale salvo
-  durante la preparación.
+  durante la preparación; si la preparación ya terminó y el resultado está
+  listo, sale.
+- `Continuar` solo se habilita cuando la etapa real terminó. Las tarjetas no
+  avanzan solas; el pipeline sigue en segundo plano y la UI se pone al día.
+- El único corte real es después de construir/verificar la imagen y antes de
+  escribir. `PrepController` expone `waiting_for_continue()` y
+  `continue_preparation()`; cancelar despierta la espera y no abre la USB.
 - Los pasos 2–3 son estimados por tiempo con guardas: la etapa real manda y no
   se muestra “verificado” ni un paso completo antes de tiempo.
+- Un fallo o una cancelación muestran el resultado de inmediato, sin obligar a
+  recorrer las tarjetas restantes.
 - El rail guarda su estado plegado/desplegado entre pantallas. En los pasos 2–6
-  solo ofrece Cancelar; Salir queda deshabilitado.
+  solo ofrece Cancelar mientras la preparación corre; Salir queda deshabilitado
+  hasta que termina.
 - A 80×24 los paneles se apilan; a 120×40 se usa el layout de dos columnas. El
   breakpoint se calcula sobre el ancho del escenario, no sobre el terminal.
 - Los mensajes de error muestran la etapa y el `errno` traducido, nunca un

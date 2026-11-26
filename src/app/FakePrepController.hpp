@@ -25,6 +25,8 @@ public:
     bool running() const override;
     bool can_write() const override;
     std::string write_block_reason() const override;
+    bool waiting_for_continue() const override;
+    void continue_preparation() override;
     bool export_default_image(PrepConfig& config, std::string& image_path,
                               std::string& error,
                               ExportGeometry geometry) override;
@@ -44,6 +46,11 @@ public:
     void set_manual_steps(bool enabled);
     void advance();
 
+    // Simula la pausa real después de construir la imagen. Solo aplica al modo
+    // manual: start() deja el flujo en "Imagen lista" y advance() no avanza
+    // hasta continue_preparation().
+    void set_wait_before_write(bool enabled);
+
     // Permite probar la UI sin root.
     void set_can_write(bool allowed, std::string reason = {});
 
@@ -57,6 +64,8 @@ private:
     PrepStage fail_stage_ = PrepStage::Idle;
     std::string fail_message_;
     bool manual_steps_ = false;
+    bool wait_before_write_ = false;
+    bool waiting_ = false;
     bool can_write_ = true;
     std::string write_block_reason_;
     PrepConfig last_export_;

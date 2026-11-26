@@ -53,29 +53,59 @@ void bind_step_scene(NodeRef<Control> steps_root, const std::string& panel_name,
     widgets.log = layout->get_node<Label>(prefix + "log");
 
     NodeRef<HBox> buttons = layout->get_node<HBox>(prefix + "buttons");
+    widgets.continue_button = buttons->get_node<Button>(prefix + "continue");
     widgets.cancel = buttons->get_node<Button>(prefix + "cancel");
 
+    widgets.continue_button->connect_signal("clicked",
+                                            [&app] { app.advance_step(); });
     widgets.cancel->connect_signal("clicked",
                                    [&app] { app.cancel_preparation(); });
 }
 
 void refresh_step_scene(StepSceneWidgets& widgets, WizardStep step,
                         const PrepProgress& progress,
-                        const std::vector<std::string>& log, bool running) {
+                        const std::vector<std::string>& log, bool live, bool done,
+                        bool result_ready, bool waiting_before_write,
+                        bool pipeline_running) {
     widgets.kicker->set_text(wizard_kicker(step));
     widgets.title->set_text(wizard_step_label(step));
     widgets.phase->set_text(wizard_phase_label(step));
     widgets.description->set_text(wizard_step_description(step));
 
-    widgets.status->set_text(progress.detail.empty() ? "Esperando..."
-                                                     : progress.detail);
+    if (done) {
+        if (waiting_before_write && step == WizardStep::Format) {
+            widgets.status->set_text(progress.detail.empty()
+                                         ? "Imagen lista; esperando Confirmar"
+                                         : progress.detail);
+        } else {
+            widgets.status->set_text("Completado");
+        }
+    } else if (live) {
+        widgets.status->set_text(progress.detail.empty() ? "Esperando..."
+                                                         : progress.detail);
+    } else {
+        widgets.status->set_text("Esperando...");
+    }
     widgets.status->set_text_color("BRIGHT_WHITE");
-    widgets.bar->set_value(static_cast<double>(progress.percent));
+    widgets.bar->set_value(done ? 100.0
+                                : (live ? static_cast<double>(progress.percent)
+                                        : 0.0));
     widgets.dots->set_text(wizard_dots(step));
     widgets.log->set_text(join_log(log));
 
-    widgets.spinner->set_running(running);
-    widgets.spinner->set_visible(running);
+    const bool spinning = live && pipeline_running;
+    widgets.spinner->set_running(spinning);
+    widgets.spinner->set_visible(spinning);
+
+    if (step == WizardStep::Format && waiting_before_write) {
+        widgets.continue_button->set_text("[ Continuar y escribir ]");
+    } else if (step == WizardStep::Verify && result_ready) {
+        widgets.continue_button->set_text("[ Ver resultado ]");
+    } else {
+        widgets.continue_button->set_text("[ Continuar ]");
+    }
+    widgets.continue_button->set_disabled(!done);
+    widgets.cancel->set_disabled(!pipeline_running);
 }
 
 } // namespace booteable::ui

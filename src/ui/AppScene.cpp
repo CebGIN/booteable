@@ -40,6 +40,21 @@ bool same(NodeRef<Control> left, NodeRef<Control> right) {
     return left.id() == right.id();
 }
 
+WizardStep next_step(WizardStep step) {
+    switch (step) {
+    case WizardStep::Partition:
+        return WizardStep::Format;
+    case WizardStep::Format:
+        return WizardStep::Write;
+    case WizardStep::Write:
+        return WizardStep::Sync;
+    case WizardStep::Sync:
+        return WizardStep::Verify;
+    default:
+        return step;
+    }
+}
+
 // Pantalla completa de la TUI. El ancho disponible para el split es el del
 // terminal menos el rail, porque el rail es un slot fijo del shell.
 class AdaptiveScreen : public Control {
@@ -179,7 +194,14 @@ void AppScene::handle_key(Key key) {
     switch (key) {
     case Key::F10:
         if (state_.screen == UiScreen::Progress) {
-            progress_notice_ = "Hay una preparación en curso; cancelá con Esc.";
+            if (!controller_.running()) {
+                quit();
+                return;
+            }
+            progress_notice_ =
+                state_.progress.waiting
+                    ? "La imagen está lista; continuá o cancelá con Esc."
+                    : "Hay una preparación en curso; cancelá con Esc.";
             progress_notice_ticks_ = 30;
             refresh_progress();
             refresh_status();
@@ -209,6 +231,8 @@ void AppScene::handle_key(Key key) {
             request_prepare();
         } else if (state_.screen == UiScreen::Confirm) {
             accept_confirmation();
+        } else if (state_.screen == UiScreen::Progress) {
+            advance_step();
         } else if (state_.screen == UiScreen::Result) {
             leave_result();
         }
@@ -298,14 +322,18 @@ void AppScene::animate(double delta_time) {
     }
 
     // Los pasos 2 y 3 no tienen señal propia en el controlador: Building cubre
-    // ambos. La UI los separa por tiempo, pero cualquier etapa real los pisa y
-    // nunca se marca un paso como hecho antes de que Building termine.
+    // ambos. El temporizador solo marca el paso más lejano; la tarjeta mostrada
+    // avanza cuando el usuario pulsa Continuar. Mientras la imagen ya está
+    // construida y esperando confirmación, no se acumula tiempo.
     if (state_.screen == UiScreen::Progress &&
-        state_.progress.stage == PrepStage::Building) {
+        state_.progress.stage == PrepStage::Building &&
+        !state_.progress.waiting) {
         building_elapsed_ += std::max(0.0, delta_time);
-        if (wizard_step_ == WizardStep::Partition &&
+        if (furthest_step_ == WizardStep::Partition &&
             building_elapsed_ >= kPartitionScreenSeconds) {
-            show_step_page(WizardStep::Format, true);
+            furthest_step_ = WizardStep::Format;
+            refresh_progress();
+            refresh_status();
         }
     }
 }
@@ -351,6 +379,10 @@ void AppScene::tick() {
         return;
     }
 
+    if (result_ready_) {
+        return;
+    }
+
     // El hilo terminó: se releen progreso y resultado juntos para no mostrar un
     // porcentaje anterior a la publicación final.
     state_.result = controller_.result();
@@ -360,9 +392,22 @@ void AppScene::tick() {
         state_.result.message =
             "La preparación terminó sin un resultado explícito.";
     }
+    update_wizard_from_progress();
     progress_notice_.clear();
     progress_notice_ticks_ = 0;
-    refresh_progress();
+
+    if (state_.result.outcome == PrepOutcome::Verified) {
+        // El éxito espera a que el usuario lea el último paso. El resultado ya
+        // está calculado; se muestra al pulsar [ Ver resultado ].
+        result_ready_ = true;
+        advance_furthest(WizardStep::Verify);
+        refresh_progress();
+        refresh_rail();
+        refresh_status();
+        return;
+    }
+
+    // Un fallo o una cancelación no se esconden detrás de la lectura.
     show(UiScreen::Result);
 }
 
@@ -578,6 +623,8 @@ void AppScene::accept_confirmation() {
     state_.progress = controller_.progress();
     wizard_step_ = WizardStep::Partition;
     state_.wizard_step = wizard_step_;
+    furthest_step_ = WizardStep::Partition;
+    result_ready_ = false;
     active_step_card_ = 0;
     seen_building_ = false;
     building_elapsed_ = 0.0;
@@ -596,8 +643,44 @@ void AppScene::dismiss_confirmation() {
     show(UiScreen::Main, true, false);
 }
 
+void AppScene::advance_step() {
+    if (state_.screen != UiScreen::Progress) {
+        return;
+    }
+    if (transition_.active) {
+        finish_transition();
+    }
+    if (wizard_step_ == WizardStep::Verify) {
+        if (result_ready_) {
+            show(UiScreen::Result);
+        }
+        return;
+    }
+    if (!is_step_done(wizard_step_)) {
+        return;
+    }
+
+    // La pausa real antes de escribir: el botón de la tarjeta Formatear libera
+    // al worker y recién ahí se abre la USB.
+    if (wizard_step_ == WizardStep::Format && state_.progress.waiting) {
+        controller_.continue_preparation();
+        state_.progress.waiting = false;
+        advance_furthest(WizardStep::Write);
+        show_step_page(WizardStep::Write, true);
+        return;
+    }
+
+    show_step_page(next_step(wizard_step_), true);
+}
+
 void AppScene::cancel_preparation() {
     if (state_.screen != UiScreen::Progress) {
+        return;
+    }
+    if (!controller_.running()) {
+        if (result_ready_) {
+            show(UiScreen::Result);
+        }
         return;
     }
     controller_.cancel();
@@ -613,6 +696,8 @@ void AppScene::leave_result() {
     state_.status.clear();
     wizard_step_ = WizardStep::Detect;
     state_.wizard_step = wizard_step_;
+    furthest_step_ = WizardStep::Detect;
+    result_ready_ = false;
     active_step_card_ = 0;
     seen_building_ = false;
     building_elapsed_ = 0.0;
@@ -767,8 +852,7 @@ void AppScene::show_step_page(WizardStep step, bool animated) {
     StepSceneWidgets& target = target_index == 0 ? step_a_ : step_b_;
     StepSceneWidgets& current = active_step_card_ == 0 ? step_a_ : step_b_;
 
-    refresh_step_scene(target, step, state_.progress, step_log_,
-                       controller_.running());
+    refresh_step_widget(target, step);
 
     if (animated && current.panel && target.panel) {
         target.panel->set_visible(true);
@@ -815,9 +899,7 @@ void AppScene::refresh_confirm() {
 
 void AppScene::refresh_progress() {
     StepSceneWidgets& widgets = active_step_widgets();
-    refresh_step_scene(widgets, wizard_step_, state_.progress, step_log_,
-                       controller_.running() &&
-                           state_.screen == UiScreen::Progress);
+    refresh_step_widget(widgets, wizard_step_);
     if (progress_notice_ticks_ > 0 && !progress_notice_.empty()) {
         widgets.status->set_text(progress_notice_);
         widgets.status->set_text_color("BRIGHT_YELLOW");
@@ -839,6 +921,7 @@ void AppScene::refresh_rail() {
     RailSceneState rail_state;
     rail_state.mode = rail_mode();
     rail_state.expanded = state_.rail_expanded;
+    rail_state.preparation_running = controller_.running();
     if (const DeviceInfo* device = selected_device()) {
         rail_state.has_device = true;
         rail_state.device_path = device->path;
@@ -885,7 +968,11 @@ void AppScene::focus_current_screen() {
         break;
     case UiScreen::Progress: {
         StepSceneWidgets& widgets = active_step_widgets();
-        if (widgets.cancel) {
+        // El foco arranca en Continuar aunque esté deshabilitado: Enter no hace
+        // nada mientras la etapa corre, en vez de cancelar sin querer.
+        if (widgets.continue_button) {
+            widgets.continue_button->grab_focus();
+        } else if (widgets.cancel) {
             widgets.cancel->grab_focus();
         }
         break;
@@ -912,42 +999,74 @@ void AppScene::update_wizard_from_progress() {
         building_elapsed_ = 0.0;
     }
 
-    if (stage == PrepStage::Building) {
-        if (!seen_building_) {
-            seen_building_ = true;
+    switch (stage) {
+    case PrepStage::Validating:
+        advance_furthest(seen_building_ ? WizardStep::Write
+                                        : WizardStep::Partition);
+        break;
+    case PrepStage::Building:
+        seen_building_ = true;
+        advance_furthest(WizardStep::Partition);
+        if (state_.progress.waiting) {
+            // La imagen ya está construida y verificada; el paso Formatear
+            // terminó aunque el worker siga esperando para escribir.
+            advance_furthest(WizardStep::Format);
         }
-        if (wizard_step_ == WizardStep::Detect) {
-            show_step_page(WizardStep::Partition, true);
-        }
-        return;
+        break;
+    case PrepStage::Unmounting:
+    case PrepStage::Opening:
+    case PrepStage::Writing:
+        advance_furthest(WizardStep::Write);
+        break;
+    case PrepStage::Syncing:
+        advance_furthest(WizardStep::Sync);
+        break;
+    case PrepStage::Verifying:
+    case PrepStage::Done:
+        advance_furthest(WizardStep::Verify);
+        break;
+    default:
+        break;
     }
+}
 
-    if (stage == PrepStage::Validating && !seen_building_) {
-        if (wizard_step_ == WizardStep::Detect) {
-            show_step_page(WizardStep::Partition, true);
-        }
-        return;
-    }
+bool AppScene::image_ready() const {
+    return state_.progress.waiting ||
+           static_cast<int>(furthest_step_) > static_cast<int>(WizardStep::Format);
+}
 
-    if (stage == PrepStage::Validating && seen_building_) {
-        show_step_page(WizardStep::Write, true);
-        return;
+bool AppScene::is_step_done(WizardStep step) const {
+    const int current = static_cast<int>(step);
+    const int furthest = static_cast<int>(furthest_step_);
+    switch (step) {
+    case WizardStep::Detect:
+        return true;
+    case WizardStep::Partition:
+        return image_ready() || furthest > current;
+    case WizardStep::Format:
+        return image_ready() || furthest > current;
+    case WizardStep::Write:
+    case WizardStep::Sync:
+        return furthest > current;
+    case WizardStep::Verify:
+        return result_ready_;
     }
+    return false;
+}
 
-    if (stage == PrepStage::Unmounting || stage == PrepStage::Opening ||
-        stage == PrepStage::Writing) {
-        show_step_page(WizardStep::Write, true);
-        return;
+void AppScene::advance_furthest(WizardStep step) {
+    if (static_cast<int>(step) > static_cast<int>(furthest_step_)) {
+        furthest_step_ = step;
     }
+}
 
-    if (stage == PrepStage::Syncing) {
-        show_step_page(WizardStep::Sync, true);
-        return;
-    }
-
-    if (stage == PrepStage::Verifying) {
-        show_step_page(WizardStep::Verify, true);
-    }
+void AppScene::refresh_step_widget(StepSceneWidgets& widgets,
+                                   WizardStep step) {
+    const bool done = is_step_done(step);
+    const bool live = !done && step == furthest_step_ && controller_.running();
+    refresh_step_scene(widgets, step, state_.progress, step_log_, live, done,
+                       result_ready_, state_.progress.waiting,
+                       controller_.running());
 }
 
 void AppScene::push_log(const std::string& line) {
@@ -1188,6 +1307,10 @@ guayaba::NodeRef<guayaba::Label> AppScene::step_status() const {
 
 guayaba::NodeRef<guayaba::Label> AppScene::step_log() const {
     return active_step_widgets().log;
+}
+
+guayaba::NodeRef<guayaba::Button> AppScene::continue_button() const {
+    return active_step_widgets().continue_button;
 }
 
 guayaba::NodeRef<guayaba::Button> AppScene::cancel_button() const {

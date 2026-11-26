@@ -24,6 +24,7 @@ struct StepSceneWidgets {
     guayaba::NodeRef<guayaba::ProgressBar> bar;
     guayaba::NodeRef<guayaba::Label> dots;
     guayaba::NodeRef<guayaba::Label> log;
+    guayaba::NodeRef<guayaba::Button> continue_button;
     guayaba::NodeRef<guayaba::Button> cancel;
 };
 
@@ -32,9 +33,14 @@ void bind_step_scene(guayaba::NodeRef<guayaba::Control> steps_root,
                      const std::string& panel_name, StepSceneWidgets& widgets,
                      AppScene& app);
 
+// `live` es el paso que el controlador está ejecutando; `done` indica que ya
+// terminó y que el usuario puede avanzar con Continuar. `waiting_before_write`
+// es la pausa real antes de abrir la USB y `result_ready` el último paso.
 void refresh_step_scene(StepSceneWidgets& widgets, WizardStep step,
                         const PrepProgress& progress,
-                        const std::vector<std::string>& log, bool running);
+                        const std::vector<std::string>& log, bool live, bool done,
+                        bool result_ready, bool waiting_before_write,
+                        bool pipeline_running);
 
 } // namespace booteable::ui
 

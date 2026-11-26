@@ -40,6 +40,7 @@ PrepController::PrepController(IBlockDeviceSource& source, IPrepRunner& runner,
 
 PrepController::~PrepController() {
     cancel_.store(true);
+    wait_cv_.notify_all();
     if (worker_.joinable()) {
         worker_.join();
     }
@@ -84,6 +85,7 @@ void PrepController::publish_failure(PrepOutcome outcome, PrepStage stage,
     result_.message = message;
     progress_.stage = stage == PrepStage::Validating ? PrepStage::Failed : stage;
     progress_.detail = message;
+    progress_.waiting = false;
 }
 
 bool PrepController::start(const PrepConfig& config) {
@@ -124,6 +126,11 @@ bool PrepController::start(const PrepConfig& config) {
     }
 
     cancel_.store(false);
+    waiting_.store(false);
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        continue_requested_ = false;
+    }
     {
         std::lock_guard<std::mutex> lock(mutex_);
         progress_ = PrepProgress{};
@@ -136,6 +143,33 @@ bool PrepController::start(const PrepConfig& config) {
     running_.store(true);
     try {
         worker_ = std::thread([this, config]() {
+            auto wait_before_write = [this]() {
+                {
+                    std::lock_guard<std::mutex> lock(wait_mutex_);
+                    continue_requested_ = false;
+                }
+                waiting_.store(true);
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    progress_.stage = PrepStage::Building;
+                    progress_.waiting = true;
+                    progress_.percent = 15;
+                    progress_.detail = "Imagen lista; esperando Confirmar";
+                }
+
+                std::unique_lock<std::mutex> lock(wait_mutex_);
+                wait_cv_.wait(lock, [this] {
+                    return continue_requested_ || cancel_.load();
+                });
+
+                waiting_.store(false);
+                {
+                    std::lock_guard<std::mutex> progress_lock(mutex_);
+                    progress_.waiting = false;
+                }
+                return !cancel_.load();
+            };
+
             PrepResult result;
             try {
                 result = runner_.run(
@@ -144,10 +178,12 @@ bool PrepController::start(const PrepConfig& config) {
                         const PrepProgress& value) {
                         std::lock_guard<std::mutex> lock(mutex_);
                         progress_ = value;
+                        progress_.waiting = false;
                         if (progress_.bytes_total == 0) {
                             progress_.bytes_total = target_bytes;
                         }
-                    });
+                    },
+                    wait_before_write);
             } catch (const std::exception& error) {
                 result = PrepResult{};
                 result.outcome = PrepOutcome::DeviceError;
@@ -168,6 +204,7 @@ bool PrepController::start(const PrepConfig& config) {
                 result_ = result;
                 progress_.stage = terminal_stage(result.outcome);
                 progress_.detail = result.message;
+                progress_.waiting = false;
                 if (progress_.bytes_total == 0) {
                     progress_.bytes_total = config.device.size_bytes;
                 }
@@ -195,7 +232,23 @@ bool PrepController::start(const PrepConfig& config) {
 void PrepController::cancel() {
     if (running_.load()) {
         cancel_.store(true);
+        wait_cv_.notify_all();
     }
+}
+
+bool PrepController::waiting_for_continue() const {
+    return waiting_.load();
+}
+
+void PrepController::continue_preparation() {
+    if (!waiting_.load()) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(wait_mutex_);
+        continue_requested_ = true;
+    }
+    wait_cv_.notify_all();
 }
 
 PrepProgress PrepController::progress() const {

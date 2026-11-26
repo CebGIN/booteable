@@ -28,6 +28,12 @@ public:
     // hereda los valores permisivos; PrepController los sobrescribe.
     virtual bool can_write() const { return true; }
     virtual std::string write_block_reason() const { return {}; }
+
+    // Pausa segura entre la imagen construida y la escritura. `waiting` es true
+    // mientras el worker espera; `continue_preparation` lo despierta. Cancelar
+    // también lo despierta y hace que el runner devuelva Cancelled.
+    virtual bool waiting_for_continue() const { return false; }
+    virtual void continue_preparation() {}
     virtual bool export_image(const PrepConfig&, std::string& error) {
         error = "El controlador no permite exportar imágenes.";
         return false;

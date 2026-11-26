@@ -225,6 +225,11 @@ void test_fake_flow_cancel_during_write() {
     controller.advance();
     app.tick();
     CHECK_EQ(app.state().progress.stage, PrepStage::Writing);
+
+    // Las tarjetas no avanzan solas: el usuario las recorre con Continuar.
+    CHECK(app.step_title()->get_text() == std::string("Particionar"));
+    app.advance_step(); // Particionar -> Formatear
+    app.advance_step(); // Formatear -> Escribir
     CHECK(app.step_title()->get_text() == std::string("Escribir"));
     CHECK_EQ(app.progress_bar()->get_value(), 55.0);
 
@@ -267,12 +272,54 @@ void test_fake_flow_verified() {
         app.tick();
     }
 
-    app.settle_transition();
+    // El resultado ya está listo, pero se muestra al terminar de leer los pasos.
+    CHECK(app.state().screen == UiScreen::Progress);
+    CHECK(app.result_ready());
+    while (app.state().screen == UiScreen::Progress) {
+        CHECK(!app.continue_button()->is_disabled());
+        app.advance_step();
+        app.settle_transition();
+    }
+
     CHECK(app.state().screen == UiScreen::Result);
     CHECK(app.state().result.outcome == PrepOutcome::Verified);
     CHECK_EQ(app.result_outcome()->get_text(), std::string("VERIFICADO"));
     CHECK(app.state().result.verified);
     CHECK_EQ(app.progress_bar()->get_value(), 100.0);
+}
+
+void test_hybrid_pause_before_write() {
+    FakePrepController controller;
+    controller.set_manual_steps(true);
+    controller.set_wait_before_write(true);
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    start_flow(app);
+    app.settle_transition();
+    CHECK(app.state().screen == UiScreen::Progress);
+    CHECK(app.state().progress.waiting);
+    CHECK(controller.waiting_for_continue());
+    CHECK(app.step_title()->get_text() == std::string("Particionar"));
+    CHECK(!app.continue_button()->is_disabled());
+
+    app.advance_step(); // Particionar -> Formatear
+    app.settle_transition();
+    CHECK(app.step_title()->get_text() == std::string("Formatear"));
+    CHECK_EQ(app.continue_button()->get_text(),
+             std::string("[ Continuar y escribir ]"));
+    CHECK(!app.continue_button()->is_disabled());
+
+    app.advance_step(); // libera la pausa y pasa a Escribir
+    app.settle_transition();
+    CHECK(!controller.waiting_for_continue());
+    CHECK(app.step_title()->get_text() == std::string("Escribir"));
+
+    controller.advance(); // Building -> Unmounting
+    app.tick();
+    CHECK_EQ(app.state().progress.stage, PrepStage::Unmounting);
+    CHECK(app.step_title()->get_text() == std::string("Escribir"));
 }
 
 void test_rejected_device_does_not_open_dialog() {
@@ -476,13 +523,22 @@ void test_time_based_partition_and_format() {
 
     app.animate(0.3);
     CHECK(app.step_title()->get_text() == std::string("Particionar"));
+    CHECK(app.continue_button()->is_disabled());
 
     app.animate(0.4);
+    // El temporizador marca el paso como listo, pero no cambia la tarjeta.
+    CHECK(app.step_title()->get_text() == std::string("Particionar"));
+    CHECK(!app.continue_button()->is_disabled());
+
+    app.advance_step();
     CHECK(app.step_title()->get_text() == std::string("Formatear"));
+    CHECK(app.continue_button()->is_disabled());
 
     // Una etapa real pisa el temporizador de inmediato.
     controller.advance(); // Building -> Unmounting
     app.tick();
+    CHECK(!app.continue_button()->is_disabled());
+    app.advance_step();
     CHECK(app.step_title()->get_text() == std::string("Escribir"));
 }
 
@@ -611,6 +667,7 @@ void run_ui_flow_tests() {
     test_no_privileges();
     test_fake_flow_cancel_during_write();
     test_fake_flow_verified();
+    test_hybrid_pause_before_write();
     test_rejected_device_does_not_open_dialog();
     test_split_ratio_persists();
     test_confirmation_is_full_screen_and_uses_snapshot();

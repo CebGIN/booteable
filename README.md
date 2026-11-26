@@ -136,11 +136,14 @@ sudo ./build/booteable   # TUI real; sin sudo enumera y exporta, pero no escribe
 La TUI recorre el wizard Detectar → Particionar → Formatear → Escribir →
 Sincronizar → Verificar. Enumera las USB, muestra identificador, capacidad,
 serie, puntos de montaje y la etiqueta/tamaño de la ESP, y exige la casilla de
-advertencia más `Enter` antes de escribir. Atajos: `F5` actualizar, `F8` abrir
-la exportación del rail (`64 MiB` o geometría de la USB), `F9` plegar/desplegar
-el rail, flechas para elegir, `Enter` preparar, `F10` salir; en los pasos `Esc`
-cancela. Sin privilegios se puede explorar y exportar una imagen, pero el botón
-de preparar queda deshabilitado con el mensaje de privilegios.
+advertencia más `Enter` antes de escribir. Las tarjetas de paso se leen con
+`[ Continuar ]`; la única pausa real es después de construir la imagen y antes
+de abrir la USB, donde el botón pasa a `[ Continuar y escribir ]`. Atajos: `F5`
+actualizar, `F8` abrir la exportación del rail (`64 MiB` o geometría de la USB),
+`F9` plegar/desplegar el rail, flechas para elegir, `Enter` preparar, `F10`
+salir; en los pasos `Esc` cancela. Sin privilegios se puede explorar y exportar
+una imagen, pero el botón de preparar queda deshabilitado con el mensaje de
+privilegios.
 
 La CLI headless construye y verifica imágenes sin tocar hardware:
 

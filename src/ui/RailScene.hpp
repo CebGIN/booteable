@@ -37,6 +37,7 @@ struct RailSceneState {
     RailMode mode = RailMode::MainTools;
     bool expanded = false;
     bool has_device = false;
+    bool preparation_running = false;
     std::string device_path;
 };
 

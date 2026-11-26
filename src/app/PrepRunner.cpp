@@ -106,7 +106,8 @@ ImageBuildResult PrepRunner::build_image(const PrepConfig& config,
 
 PrepResult PrepRunner::run(
     const PrepConfig& config, const std::atomic_bool& cancel,
-    const std::function<void(const PrepProgress&)>& progress) {
+    const std::function<void(const PrepProgress&)>& progress,
+    WaitBeforeWrite wait_before_write) {
     const auto emit = [&progress](PrepStage stage, int percent,
                                   const std::string& detail) {
         if (!progress) {
@@ -168,6 +169,14 @@ PrepResult PrepRunner::run(
                  std::to_string(built.esp_bytes / kMib) + " MiB");
 
         if (cancel.load()) {
+            emit(PrepStage::Cancelled, 15, "Cancelado antes de escribir");
+            return failure(PrepOutcome::Cancelled, PrepStage::Building,
+                           "Preparación cancelada antes de escribir.");
+        }
+
+        // Único punto de pausa real: la imagen ya está construida y verificada,
+        // la USB todavía no se abrió. El worker espera a que la UI confirme.
+        if (wait_before_write && !wait_before_write()) {
             emit(PrepStage::Cancelled, 15, "Cancelado antes de escribir");
             return failure(PrepOutcome::Cancelled, PrepStage::Building,
                            "Preparación cancelada antes de escribir.");

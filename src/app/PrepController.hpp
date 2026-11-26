@@ -2,6 +2,7 @@
 #define BOOTEABLE_APP_PREPCONTROLLER_HPP
 
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -50,6 +51,8 @@ public:
 
     bool can_write() const override;
     std::string write_block_reason() const override;
+    bool waiting_for_continue() const override;
+    void continue_preparation() override;
     bool export_image(const PrepConfig& config, std::string& error) override;
     bool export_default_image(PrepConfig& config, std::string& image_path,
                               std::string& error,
@@ -68,6 +71,13 @@ private:
 
     std::atomic_bool running_{false};
     std::atomic_bool cancel_{false};
+    std::atomic_bool waiting_{false};
+
+    // Pausa entre construir la imagen y escribir. `continue_requested_` está
+    // protegido por `wait_mutex_`; la cancelación también despierta la espera.
+    std::mutex wait_mutex_;
+    std::condition_variable wait_cv_;
+    bool continue_requested_ = false;
 
     mutable std::mutex mutex_;
     PrepProgress progress_;
