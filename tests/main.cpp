@@ -1,4 +1,6 @@
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "TestHarness.hpp"
 
@@ -26,21 +28,70 @@ void report_failure(const char* file, int line, const std::string& message) {
 }
 } // namespace booteable::test
 
-int main() {
-    run_validation_tests();
-    run_fake_controller_tests();
-    run_core_tests();
-    run_layout_tests();
-    run_gpt_tests();
-    run_fat32_tests();
-    run_image_roundtrip_tests();
-    run_safety_policy_tests();
-    run_sysfs_source_tests();
-    run_mount_manager_tests();
-    run_device_writer_tests();
-    run_flash_tests();
-    run_prep_controller_tests();
-    run_ui_flow_tests();
+namespace {
+
+struct Suite {
+    const char* name;
+    void (*run)();
+};
+
+const Suite kSuites[] = {
+    {"validation", &run_validation_tests},
+    {"fake_controller", &run_fake_controller_tests},
+    {"core", &run_core_tests},
+    {"layout", &run_layout_tests},
+    {"gpt", &run_gpt_tests},
+    {"fat32", &run_fat32_tests},
+    {"image_roundtrip", &run_image_roundtrip_tests},
+    {"safety_policy", &run_safety_policy_tests},
+    {"sysfs_source", &run_sysfs_source_tests},
+    {"mount_manager", &run_mount_manager_tests},
+    {"device_writer", &run_device_writer_tests},
+    {"flash", &run_flash_tests},
+    {"prep_controller", &run_prep_controller_tests},
+    {"ui_flow", &run_ui_flow_tests},
+};
+
+void print_suites() {
+    std::cerr << "Suites disponibles:\n";
+    for (const Suite& suite : kSuites) {
+        std::cerr << "  " << suite.name << '\n';
+    }
+}
+
+const Suite* find_suite(const std::string& name) {
+    for (const Suite& suite : kSuites) {
+        if (name == suite.name) {
+            return &suite;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    std::vector<const Suite*> selected;
+
+    if (argc == 1) {
+        for (const Suite& suite : kSuites) {
+            selected.push_back(&suite);
+        }
+    } else {
+        for (int index = 1; index < argc; ++index) {
+            const Suite* suite = find_suite(argv[index]);
+            if (suite == nullptr) {
+                std::cerr << "Suite desconocida: " << argv[index] << '\n';
+                print_suites();
+                return 2;
+            }
+            selected.push_back(suite);
+        }
+    }
+
+    for (const Suite* suite : selected) {
+        suite->run();
+    }
 
     if (booteable::test::failures != 0) {
         std::cerr << booteable::test::failures << " comprobación(es) fallaron.\n";

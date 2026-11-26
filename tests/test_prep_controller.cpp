@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -12,6 +13,8 @@
 #include <thread>
 #include <utility>
 #include <vector>
+
+#include <unistd.h>
 
 #include <guayaba/Guayaba.hpp>
 
@@ -38,13 +41,15 @@ using booteable::ui::UiScreen;
 
 class FakeSource : public booteable::IBlockDeviceSource {
 public:
-    explicit FakeSource(std::string path = "/dev/sdb")
+    explicit FakeSource(std::string path = "/dev/sdb",
+                        std::uint64_t size_bytes =
+                            128ull * 1024ull * 1024ull)
         : device_() {
         device_.path = std::move(path);
         device_.by_id = "/dev/disk/by-id/usb-Fake_128MB_0001";
         device_.model = "Fake USB 128MB";
         device_.serial = "FAKE128";
-        device_.size_bytes = 128ull * 1024ull * 1024ull;
+        device_.size_bytes = size_bytes;
         device_.logical_sector = 512;
         device_.removable = true;
         device_.transport = DeviceTransport::Usb;
@@ -155,6 +160,18 @@ bool wait_for(Predicate predicate, int milliseconds = 3000) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     return predicate();
+}
+
+std::size_t open_fd_count() {
+    std::size_t count = 0;
+    std::error_code error;
+    std::filesystem::directory_iterator entry("/proc/self/fd", error);
+    const std::filesystem::directory_iterator end;
+    while (!error && entry != end) {
+        ++count;
+        entry.increment(error);
+    }
+    return count;
 }
 
 void test_controller_validation() {
@@ -285,40 +302,67 @@ void test_destructor_joins_running_worker() {
 }
 
 void test_real_runner_to_regular_file() {
+    constexpr std::uint64_t target_bytes = 64ull * 1024ull * 1024ull;
     const std::filesystem::path target =
-        std::filesystem::temp_directory_path() / "booteable-wp4b-target.img";
+        std::filesystem::temp_directory_path() / "booteable-wp5-target.img";
     std::error_code ignored;
     std::filesystem::remove(target, ignored);
     {
         std::ofstream create(target, std::ios::binary | std::ios::trunc);
         CHECK(create.good());
     }
-    std::filesystem::resize_file(target, 128ull * 1024ull * 1024ull);
+    std::filesystem::resize_file(target, target_bytes);
 
-    FakeSource source(target.string());
+    FakeSource source(target.string(), target_bytes);
     booteable::PrepRunner runner(source);
 
     PrepConfig config = valid_config();
     config.device = source.device();
     config.image_path.clear();
 
+    const std::size_t descriptors_before = open_fd_count();
     std::atomic_bool cancel{false};
     int progress_events = 0;
     const PrepResult result = runner.run(
         config, cancel, [&progress_events](const PrepProgress&) {
             ++progress_events;
         });
+    const std::size_t descriptors_after = open_fd_count();
+
+    if (result.outcome != PrepOutcome::Verified) {
+        std::cerr << "PrepRunner sobre archivo de 64 MiB falló en la etapa "
+                  << static_cast<int>(result.failed_stage) << ": "
+                  << result.message << '\n';
+    }
 
     CHECK(result.outcome == PrepOutcome::Verified);
     CHECK(result.verified);
     CHECK(result.synchronized);
     CHECK(progress_events > 0);
-    CHECK_EQ(std::filesystem::file_size(target),
-              std::uintmax_t{128ull * 1024ull * 1024ull});
+    CHECK_EQ(std::filesystem::file_size(target), target_bytes);
     CHECK(!result.image_sha256.empty());
     CHECK_EQ(result.image_sha256, result.device_sha256);
+    CHECK_EQ(descriptors_after, descriptors_before);
 
     std::filesystem::remove(target, ignored);
+}
+
+void test_default_privilege_check_without_root() {
+    if (::geteuid() == 0) {
+        // En un entorno root no se puede comprobar el bloqueo de P10.
+        return;
+    }
+
+    FakeSource source;
+    FakeRunner runner;
+    PrepController controller(source, runner);
+
+    CHECK(!controller.can_write());
+    CHECK(controller.write_block_reason().find("sudo") != std::string::npos);
+    CHECK(!controller.start(valid_config()));
+    CHECK_EQ(runner.runs.load(), 0);
+    CHECK(controller.result().outcome == PrepOutcome::PermissionDenied);
+    CHECK(controller.result().message.find("sudo") != std::string::npos);
 }
 
 } // namespace
@@ -333,4 +377,5 @@ void run_prep_controller_tests() {
     test_export_without_privileges_from_ui();
     test_destructor_joins_running_worker();
     test_real_runner_to_regular_file();
+    test_default_privilege_check_without_root();
 }

@@ -151,7 +151,7 @@ booteable_warnings(booteable)
 add_executable(booteable-image src/cli/main.cpp)
 target_link_libraries(booteable-image PRIVATE booteable_core)
 target_compile_definitions(booteable-image PRIVATE
-    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp4")
+    BOOTEABLE_VERSION="${PROJECT_VERSION}-wp5")
 booteable_warnings(booteable-image)
 
 # --- Pruebas ---------------------------------------------------------------------
@@ -177,7 +177,27 @@ target_include_directories(booteable_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(booteable_tests PRIVATE booteable_core booteable_ui)
 booteable_warnings(booteable_tests)
 
-add_test(NAME unit COMMAND booteable_tests)
+# Cada suite se registra por separado para que CTest pueda repartirlas entre
+# núcleos. `booteable_tests` sin argumentos sigue ejecutando todas.
+set(BOOTEABLE_TEST_SUITES
+    validation
+    fake_controller
+    core
+    layout
+    gpt
+    fat32
+    image_roundtrip
+    safety_policy
+    sysfs_source
+    mount_manager
+    device_writer
+    flash
+    prep_controller
+    ui_flow)
+
+foreach(suite IN LISTS BOOTEABLE_TEST_SUITES)
+    add_test(NAME test_${suite} COMMAND booteable_tests ${suite})
+endforeach()
 
 # Cabecera PE32+, subsistema EFI y ausencia de dependencias de Windows.
 add_test(NAME efi_binary
@@ -185,12 +205,15 @@ add_test(NAME efi_binary
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/check-efi.py"
             "${EFI_BINARY}")
 
-# La prueba virtual se salta con código 77 si faltan QEMU u OVMF.
+# La prueba virtual se salta con código 77 si faltan QEMU u OVMF. Las pruebas
+# QEMU comparten las variables de OVMF y el log serie, así que no pueden correr
+# a la vez aunque CTest use varios núcleos.
 add_test(NAME qemu_boot
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/run-qemu.sh" --headless)
 set_tests_properties(qemu_boot PROPERTIES
     SKIP_RETURN_CODE 77
-    TIMEOUT 90)
+    TIMEOUT 90
+    RESOURCE_LOCK qemu_ovmf)
 
 # Prueba negativa: con Secure Boot activo el PE sin firma no debe arrancar.
 add_test(NAME qemu_secure_boot
@@ -198,7 +221,8 @@ add_test(NAME qemu_secure_boot
             --headless --secure-boot)
 set_tests_properties(qemu_secure_boot PROPERTIES
     SKIP_RETURN_CODE 77
-    TIMEOUT 90)
+    TIMEOUT 90
+    RESOURCE_LOCK qemu_ovmf)
 
 # Prueba funcional de la CLI con imágenes de 512 y 4096.
 add_test(NAME image_cli
@@ -218,7 +242,8 @@ add_test(NAME qemu_boot_image
             "$<TARGET_FILE:booteable-image>")
 set_tests_properties(qemu_boot_image PROPERTIES
     SKIP_RETURN_CODE 77
-    TIMEOUT 120)
+    TIMEOUT 120
+    RESOURCE_LOCK qemu_ovmf)
 
 # La misma prueba con sector lógico de 4096 y ESP de 260 MiB.
 add_test(NAME qemu_boot_4kn
@@ -227,4 +252,12 @@ add_test(NAME qemu_boot_4kn
             "${CMAKE_BINARY_DIR}/qemu-image-4kn.img" 4096)
 set_tests_properties(qemu_boot_4kn PROPERTIES
     SKIP_RETURN_CODE 77
-    TIMEOUT 150)
+    TIMEOUT 150
+    RESOURCE_LOCK qemu_ovmf)
+
+# Atajo de WP5: reparte las suites entre núcleos para cumplir el presupuesto de
+# dos minutos en un equipo de cuatro núcleos.
+add_custom_target(check
+    COMMAND "${CMAKE_CTEST_COMMAND}" -j4 --output-on-failure
+    USES_TERMINAL
+    COMMENT "Ejecutando CTest en paralelo")

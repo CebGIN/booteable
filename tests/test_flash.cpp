@@ -68,124 +68,94 @@ std::filesystem::path empty_mountinfo(const std::string& name) {
     return path;
 }
 
-void test_flash_512_roundtrip() {
-    const std::filesystem::path image = temp_path("booteable-test-flash-512.img");
+void test_flash_512_roundtrip(const std::filesystem::path& image,
+                              const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-512-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-512-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 512);
+    const DeviceInfo device = file_device(dest, manifest, 512);
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts);
+        device, image, manifest, writer, mounts);
 
     CHECK(result.outcome == PrepOutcome::Verified);
     CHECK(result.verified);
     CHECK(result.synchronized);
     CHECK(result.failed_stage == PrepStage::Idle);
-    CHECK_EQ(result.image_sha256, built.manifest.manifest_sha256);
-    CHECK_EQ(result.device_sha256, built.manifest.manifest_sha256);
-    CHECK_EQ(result.bytes_written, built.manifest.disk_bytes);
-    CHECK_EQ(std::filesystem::file_size(dest), built.manifest.disk_bytes);
+    CHECK_EQ(result.image_sha256, manifest.manifest_sha256);
+    CHECK_EQ(result.device_sha256, manifest.manifest_sha256);
+    CHECK_EQ(result.bytes_written, manifest.disk_bytes);
+    CHECK_EQ(std::filesystem::file_size(dest), manifest.disk_bytes);
 
     ImageManifest read_back;
     std::string error;
     const booteable::ImageVerifier verifier;
-    CHECK(verifier.verify_against(dest, built.manifest, read_back, error));
+    CHECK(verifier.verify_against(dest, manifest, read_back, error));
 
-    std::filesystem::remove(image);
     std::filesystem::remove(dest);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_4kn_roundtrip() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-4kn.img");
+void test_flash_4kn_roundtrip(const std::filesystem::path& image,
+                              const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-4kn-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-4kn-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 320, 4096, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 4096);
+    const DeviceInfo device = file_device(dest, manifest, 4096);
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts);
+        device, image, manifest, writer, mounts);
 
     CHECK(result.outcome == PrepOutcome::Verified);
     CHECK(result.verified);
-    CHECK_EQ(result.device_sha256, built.manifest.manifest_sha256);
-    CHECK_EQ(std::filesystem::file_size(dest), built.manifest.disk_bytes);
+    CHECK_EQ(result.device_sha256, manifest.manifest_sha256);
+    CHECK_EQ(std::filesystem::file_size(dest), manifest.disk_bytes);
 
-    std::filesystem::remove(image);
     std::filesystem::remove(dest);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_disconnected_mid_write() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-enodev.img");
+void test_flash_disconnected_mid_write(const std::filesystem::path& image,
+                                       const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-enodev-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-enodev-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 512);
+    const DeviceInfo device = file_device(dest, manifest, 512);
     FileDeviceWriter inner(true, true);
     booteable::FaultyDeviceWriter writer(inner);
     writer.fail_after(2 * booteable::kMib, ENODEV);
     MountManager mounts(mountinfo);
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts);
+        device, image, manifest, writer, mounts);
 
     CHECK(result.outcome == PrepOutcome::Disconnected);
     CHECK(!result.verified);
     CHECK(result.failed_stage == PrepStage::Writing);
     CHECK(result.bytes_written > 0);
-    CHECK(result.bytes_written < built.manifest.disk_bytes);
+    CHECK(result.bytes_written < manifest.disk_bytes);
     CHECK(result.message.find("incompleto") != std::string::npos);
 
-    std::filesystem::remove(image);
     std::filesystem::remove(dest);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_cancelled_mid_write_is_incomplete() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-cancel.img");
+void test_flash_cancelled_mid_write_is_incomplete(
+    const std::filesystem::path& image, const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-cancel-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-cancel-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 512);
+    const DeviceInfo device = file_device(dest, manifest, 512);
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
 
@@ -199,33 +169,25 @@ void test_flash_cancelled_mid_write_is_incomplete() {
     };
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts, callbacks);
+        device, image, manifest, writer, mounts, callbacks);
 
     CHECK(result.outcome == PrepOutcome::Incomplete);
     CHECK(!result.verified);
     CHECK(result.bytes_written > 0);
     CHECK(result.message.find("incompleto") != std::string::npos);
 
-    std::filesystem::remove(image);
     std::filesystem::remove(dest);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_cancelled_before_start() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-cancel-start.img");
+void test_flash_cancelled_before_start(const std::filesystem::path& image,
+                                       const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-cancel-start-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-cancel-start-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 512);
+    const DeviceInfo device = file_device(dest, manifest, 512);
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
 
@@ -234,91 +196,67 @@ void test_flash_cancelled_before_start() {
     callbacks.cancel = &cancel;
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts, callbacks);
+        device, image, manifest, writer, mounts, callbacks);
 
     CHECK(result.outcome == PrepOutcome::Cancelled);
     CHECK(!result.verified);
     CHECK_EQ(result.bytes_written, 0ull);
     CHECK(!std::filesystem::exists(dest));
 
-    std::filesystem::remove(image);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_rejects_size_mismatch() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-size.img");
+void test_flash_rejects_size_mismatch(const std::filesystem::path& image,
+                                      const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-size-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-size-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    DeviceInfo device = file_device(dest, built.manifest, 512);
+    DeviceInfo device = file_device(dest, manifest, 512);
     device.size_bytes -= 512;
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts);
+        device, image, manifest, writer, mounts);
 
     CHECK(result.outcome == PrepOutcome::InvalidTarget);
     CHECK(result.failed_stage == PrepStage::Validating);
     CHECK(!std::filesystem::exists(dest));
 
-    std::filesystem::remove(image);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_rejects_sector_mismatch() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-sector.img");
+void test_flash_rejects_sector_mismatch(const std::filesystem::path& image,
+                                        const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-sector-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-sector-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 4096);
+    const DeviceInfo device = file_device(dest, manifest, 4096);
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts);
+        device, image, manifest, writer, mounts);
 
     CHECK(result.outcome == PrepOutcome::InvalidTarget);
     CHECK(result.message.find("sectores de 512") != std::string::npos);
     CHECK(!std::filesystem::exists(dest));
 
-    std::filesystem::remove(image);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_disconnected_after_unmount() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-gone.img");
+void test_flash_disconnected_after_unmount(const std::filesystem::path& image,
+                                           const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-gone-target.img");
     const std::filesystem::path mountinfo =
         empty_mountinfo("booteable-test-flash-gone-mountinfo");
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    const DeviceInfo device = file_device(dest, built.manifest, 512);
+    const DeviceInfo device = file_device(dest, manifest, 512);
     FileDeviceWriter writer(true, true);
     MountManager mounts(mountinfo);
 
@@ -328,18 +266,16 @@ void test_flash_disconnected_after_unmount() {
     };
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts, callbacks);
+        device, image, manifest, writer, mounts, callbacks);
 
     CHECK(result.outcome == PrepOutcome::Disconnected);
     CHECK(!std::filesystem::exists(dest));
 
-    std::filesystem::remove(image);
     std::filesystem::remove(mountinfo);
 }
 
-void test_flash_unmount_failure_does_not_open() {
-    const std::filesystem::path image =
-        temp_path("booteable-test-flash-unmount.img");
+void test_flash_unmount_failure_does_not_open(
+    const std::filesystem::path& image, const ImageManifest& manifest) {
     const std::filesystem::path dest =
         temp_path("booteable-test-flash-unmount-target.img");
     const std::filesystem::path mountinfo =
@@ -349,13 +285,7 @@ void test_flash_unmount_failure_does_not_open() {
         file << "2 1 8:16 / /mnt/usb rw - vfat /dev/sdb1 rw\n";
     }
 
-    ImageBuildResult built;
-    CHECK(build_image(image, 80, 512, built));
-    if (!built.ok) {
-        return;
-    }
-
-    DeviceInfo device = file_device(dest, built.manifest, 512);
+    DeviceInfo device = file_device(dest, manifest, 512);
     DevicePartition partition;
     partition.name = "sdb1";
     partition.dev_id = "8:17";
@@ -366,26 +296,47 @@ void test_flash_unmount_failure_does_not_open() {
     MountManager mounts(mountinfo, [](const std::string&) { return -1; });
 
     const PrepResult result = booteable::flash_image_to_device(
-        device, image, built.manifest, writer, mounts);
+        device, image, manifest, writer, mounts);
 
     CHECK(result.outcome == PrepOutcome::UnmountError);
     CHECK(result.failed_stage == PrepStage::Unmounting);
     CHECK(!std::filesystem::exists(dest));
 
-    std::filesystem::remove(image);
     std::filesystem::remove(mountinfo);
 }
 
 } // namespace
 
 void run_flash_tests() {
-    test_flash_512_roundtrip();
-    test_flash_4kn_roundtrip();
-    test_flash_disconnected_mid_write();
-    test_flash_cancelled_mid_write_is_incomplete();
-    test_flash_cancelled_before_start();
-    test_flash_rejects_size_mismatch();
-    test_flash_rejects_sector_mismatch();
-    test_flash_disconnected_after_unmount();
-    test_flash_unmount_failure_does_not_open();
+    // Una sola imagen por geometría: las pruebas la leen y escriben destinos
+    // distintos. Así la suite no reconstruye la misma imagen siete veces.
+    const std::filesystem::path image512 =
+        temp_path("booteable-test-flash-512.img");
+    const std::filesystem::path image4kn =
+        temp_path("booteable-test-flash-4kn.img");
+
+    ImageBuildResult built512;
+    ImageBuildResult built4kn;
+    // 80 MiB es el caso de aceptación de WP3b; el resto de las pruebas reutiliza
+    // la misma imagen en vez de reconstruirla.
+    CHECK(build_image(image512, 80, 512, built512));
+    CHECK(build_image(image4kn, 320, 4096, built4kn));
+
+    if (built512.ok && built4kn.ok) {
+        test_flash_512_roundtrip(image512, built512.manifest);
+        test_flash_4kn_roundtrip(image4kn, built4kn.manifest);
+        test_flash_disconnected_mid_write(image512, built512.manifest);
+        test_flash_cancelled_mid_write_is_incomplete(image512,
+                                                     built512.manifest);
+        test_flash_cancelled_before_start(image512, built512.manifest);
+        test_flash_rejects_size_mismatch(image512, built512.manifest);
+        test_flash_rejects_sector_mismatch(image512, built512.manifest);
+        test_flash_disconnected_after_unmount(image512, built512.manifest);
+        test_flash_unmount_failure_does_not_open(image512,
+                                                 built512.manifest);
+    }
+
+    std::error_code ignored;
+    std::filesystem::remove(image512, ignored);
+    std::filesystem::remove(image4kn, ignored);
 }
