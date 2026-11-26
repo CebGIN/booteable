@@ -257,4 +257,129 @@ std::string progress_step(PrepStage current, PrepStage step) {
     return "[ ] " + stage_label(step);
 }
 
+int wizard_step_number(WizardStep step) {
+    return static_cast<int>(step);
+}
+
+std::string wizard_step_label(WizardStep step) {
+    switch (step) {
+    case WizardStep::Detect:
+        return "Detectar";
+    case WizardStep::Partition:
+        return "Particionar";
+    case WizardStep::Format:
+        return "Formatear";
+    case WizardStep::Write:
+        return "Escribir";
+    case WizardStep::Sync:
+        return "Sincronizar";
+    case WizardStep::Verify:
+        return "Verificar";
+    }
+    return "Preparar";
+}
+
+std::string wizard_step_description(WizardStep step) {
+    switch (step) {
+    case WizardStep::Detect:
+        return "Enumerar las USB, validar su identidad y aplicar la política de "
+               "seguridad.";
+    case WizardStep::Partition:
+        return "Generar el MBR protector y las tablas GPT primaria y de respaldo "
+               "con la geometría del destino.";
+    case WizardStep::Format:
+        return "Crear la ESP FAT32 y copiar EFI/BOOT/BOOTX64.EFI al árbol 8.3.";
+    case WizardStep::Write:
+        return "Desmontar el destino, abrirlo y copiar la imagen completa. Una "
+               "cancelación deja el medio marcado como incompleto.";
+    case WizardStep::Sync:
+        return "Forzar la bajada de caché y confirmar que el medio quedó estable.";
+    case WizardStep::Verify:
+        return "Releer MBR, GPT, ESP y EFI, y comparar el SHA-256 del manifiesto "
+               "contra lo escrito.";
+    }
+    return "";
+}
+
+std::string wizard_phase_label(WizardStep step) {
+    switch (step) {
+    case WizardStep::Partition:
+    case WizardStep::Format:
+        return "FASE 1 · CONSTRUIR IMAGEN · la USB todavía no se modifica";
+    case WizardStep::Write:
+    case WizardStep::Sync:
+    case WizardStep::Verify:
+        return "FASE 2 · ESCRIBIR Y VERIFICAR EN EL DESTINO";
+    case WizardStep::Detect:
+        return "";
+    }
+    return "";
+}
+
+std::string wizard_kicker(WizardStep step) {
+    return "PASO " + std::to_string(wizard_step_number(step)) + " DE " +
+           std::to_string(kWizardStepCount);
+}
+
+WizardStep wizard_step_for_stage(PrepStage stage) {
+    switch (stage) {
+    case PrepStage::Idle:
+    case PrepStage::Enumerating:
+    case PrepStage::Confirming:
+    case PrepStage::Validating:
+    case PrepStage::Building:
+        return WizardStep::Partition;
+    case PrepStage::Unmounting:
+    case PrepStage::Opening:
+    case PrepStage::Writing:
+        return WizardStep::Write;
+    case PrepStage::Syncing:
+        return WizardStep::Sync;
+    case PrepStage::Verifying:
+    case PrepStage::Done:
+        return WizardStep::Verify;
+    case PrepStage::Failed:
+    case PrepStage::Cancelled:
+    case PrepStage::Incomplete:
+        return WizardStep::Detect;
+    }
+    return WizardStep::Detect;
+}
+
+std::string wizard_failed_label(PrepStage stage) {
+    switch (stage) {
+    case PrepStage::Building:
+        return "Preparar imagen (Particionar / Formatear)";
+    case PrepStage::Validating:
+        return "Validar destino";
+    case PrepStage::Unmounting:
+    case PrepStage::Opening:
+    case PrepStage::Writing:
+        return "Escribir";
+    case PrepStage::Syncing:
+        return "Sincronizar";
+    case PrepStage::Verifying:
+    case PrepStage::Done:
+        return "Verificar";
+    default:
+        return "Preparación";
+    }
+}
+
+std::string wizard_dots(WizardStep current) {
+    std::string dots = "[";
+    const int now = wizard_step_number(current);
+    for (int index = 1; index <= kWizardStepCount; ++index) {
+        if (index < now) {
+            dots += '#';
+        } else if (index == now) {
+            dots += '>';
+        } else {
+            dots += '-';
+        }
+    }
+    dots += ']';
+    return dots;
+}
+
 } // namespace booteable::ui

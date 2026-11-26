@@ -30,15 +30,12 @@ struct MainSceneWidgets {
     guayaba::NodeRef<guayaba::Label> detail_safety;
     guayaba::NodeRef<guayaba::Label> detail_image;
     guayaba::NodeRef<guayaba::Button> prepare;
-    guayaba::NodeRef<guayaba::Button> export_image;
-    guayaba::NodeRef<guayaba::Label> status;
 };
 
-// Panel principal: lista de USB y detalles del destino elegido. La disposición
-// en una o dos columnas la decide SplitContainer según el ancho de la pantalla.
-// Los nodos vienen de assets/ui/booteable.gscene; esta capa solo los resuelve,
-// conecta sus señales y los refresca.
-void bind_main_scene(guayaba::NodeRef<guayaba::Control> content,
+// Pantalla del paso 1: lista de USB, detalles y la única acción sobre la
+// selección. Exportar y actualizar viven en el rail. El root viene de
+// assets/ui/booteable_main.gscene; esta capa solo resuelve y refresca.
+void bind_main_scene(guayaba::NodeRef<guayaba::PanelContainer> root,
                      MainSceneWidgets& widgets, AppScene& app);
 
 void refresh_main_scene(MainSceneWidgets& widgets,

@@ -11,6 +11,7 @@ class AppScene;
 
 struct ResultSceneWidgets {
     guayaba::NodeRef<guayaba::PanelContainer> panel;
+    guayaba::NodeRef<guayaba::Label> kicker;
     guayaba::NodeRef<guayaba::Label> outcome;
     guayaba::NodeRef<guayaba::Label> stage;
     guayaba::NodeRef<guayaba::Label> message;
@@ -21,7 +22,7 @@ struct ResultSceneWidgets {
     guayaba::NodeRef<guayaba::Button> quit;
 };
 
-void bind_result_scene(guayaba::NodeRef<guayaba::Control> content,
+void bind_result_scene(guayaba::NodeRef<guayaba::PanelContainer> root,
                        ResultSceneWidgets& widgets, AppScene& app);
 
 void refresh_result_scene(ResultSceneWidgets& widgets, const DeviceInfo& device,

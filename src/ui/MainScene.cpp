@@ -11,7 +11,6 @@ namespace booteable::ui {
 namespace {
 
 using guayaba::Button;
-using guayaba::Control;
 using guayaba::HBox;
 using guayaba::Label;
 using guayaba::ListView;
@@ -22,21 +21,23 @@ using guayaba::VBox;
 
 } // namespace
 
-void bind_main_scene(NodeRef<Control> content, MainSceneWidgets& widgets,
+void bind_main_scene(NodeRef<PanelContainer> root, MainSceneWidgets& widgets,
                      AppScene& app) {
-    widgets.panel = content->get_node<PanelContainer>("main");
-
-    NodeRef<VBox> layout = widgets.panel->get_node<VBox>("main_layout");
+    widgets.panel = root;
+    NodeRef<VBox> layout = root->get_node<VBox>("main_layout");
     widgets.split = layout->get_node<SplitContainer>("main_split");
 
-    widgets.devices_panel = widgets.split->get_node<PanelContainer>("devices_panel");
+    widgets.devices_panel =
+        widgets.split->get_node<PanelContainer>("devices_panel");
     NodeRef<VBox> devices_layout =
         widgets.devices_panel->get_node<VBox>("devices_layout");
     widgets.count = devices_layout->get_node<Label>("devices_count");
     widgets.device_list = devices_layout->get_node<ListView>("device_list");
 
-    widgets.details_panel = widgets.split->get_node<PanelContainer>("details_panel");
-    NodeRef<VBox> details = widgets.details_panel->get_node<VBox>("details_layout");
+    widgets.details_panel =
+        widgets.split->get_node<PanelContainer>("details_panel");
+    NodeRef<VBox> details =
+        widgets.details_panel->get_node<VBox>("details_layout");
     widgets.detail_title = details->get_node<Label>("detail_title");
     widgets.detail_model = details->get_node<Label>("detail_model");
     widgets.detail_capacity = details->get_node<Label>("detail_capacity");
@@ -48,9 +49,6 @@ void bind_main_scene(NodeRef<Control> content, MainSceneWidgets& widgets,
 
     NodeRef<HBox> buttons = details->get_node<HBox>("detail_buttons");
     widgets.prepare = buttons->get_node<Button>("prepare");
-    widgets.export_image = buttons->get_node<Button>("export");
-
-    widgets.status = layout->get_node<Label>("status");
 
     widgets.device_list->connect_signal<int>(
         "selection_changed", [&app](int index) { app.select(index); });
@@ -58,8 +56,6 @@ void bind_main_scene(NodeRef<Control> content, MainSceneWidgets& widgets,
         "item_activated", [&app](int) { app.request_prepare(); });
     widgets.prepare->connect_signal("clicked",
                                     [&app] { app.request_prepare(); });
-    widgets.export_image->connect_signal(
-        "clicked", [&app] { app.request_export(); });
 }
 
 void refresh_main_scene(MainSceneWidgets& widgets,
@@ -79,25 +75,18 @@ void refresh_main_scene(MainSceneWidgets& widgets,
     }
 
     widgets.count->set_text("USB detectadas: " + std::to_string(devices.size()));
-    widgets.prepare->set_disabled(!state.can_write);
-    widgets.export_image->set_disabled(devices.empty());
 
-    std::string status = state.status;
-    StatusLevel level = state.status_level;
-    if (!state.can_write && !state.write_reason.empty() &&
-        (status.empty() || level == StatusLevel::Hint)) {
-        status = state.write_reason;
-        level = StatusLevel::Warning;
-    }
-    if (status.empty()) {
-        status = "F5 actualizar | Enter preparar | F8 exportar | F10 salir";
-        level = StatusLevel::Hint;
-    }
-    widgets.status->set_text(status);
-    widgets.status->set_text_color(status_color(level));
+    const bool has_selection =
+        !devices.empty() && state.selected < devices.size();
+    widgets.prepare->set_text(has_selection
+                                  ? "[ Preparar " + devices[state.selected].path +
+                                        " ]"
+                                  : "[ Preparar USB ]");
+    widgets.prepare->set_disabled(
+        !state.can_write || !has_selection ||
+        state.safety.verdict == SafetyVerdict::Rejected);
 
-    if (devices.empty() ||
-        state.selected >= static_cast<std::size_t>(devices.size())) {
+    if (!has_selection) {
         widgets.detail_title->set_text("Sin dispositivo seleccionado");
         widgets.detail_model->set_text("Modelo: -");
         widgets.detail_capacity->set_text("Capacidad: -");

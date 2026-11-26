@@ -19,6 +19,7 @@ using booteable::PrepStage;
 using booteable::SafetyVerdict;
 using booteable::ui::AppScene;
 using booteable::ui::UiScreen;
+using booteable::ui::WizardStep;
 using guayaba::Key;
 using guayaba::Rect;
 using guayaba::Vec2;
@@ -29,11 +30,22 @@ std::unique_ptr<guayaba::Node> layout(AppScene& app, int width, int height) {
     return root;
 }
 
+void start_flow(AppScene& app) {
+    app.handle_key(Key::ENTER);
+    app.set_confirmed(true);
+    app.handle_key(Key::ENTER);
+}
+
 void test_format() {
     using booteable::ui::format_bytes;
     using booteable::ui::outcome_color;
     using booteable::ui::outcome_label;
     using booteable::ui::progress_step;
+    using booteable::ui::wizard_dots;
+    using booteable::ui::wizard_failed_label;
+    using booteable::ui::wizard_phase_label;
+    using booteable::ui::wizard_step_for_stage;
+    using booteable::ui::wizard_step_label;
 
     CHECK_EQ(format_bytes(0), std::string("0 B"));
     CHECK_EQ(format_bytes(1536), std::string("1.5 KiB"));
@@ -52,8 +64,18 @@ void test_format() {
              std::string("[x] Construyendo la imagen"));
     CHECK_EQ(progress_step(PrepStage::Writing, PrepStage::Writing),
              std::string("[>] Escribiendo la imagen"));
-    CHECK_EQ(progress_step(PrepStage::Writing, PrepStage::Verifying),
-             std::string("[ ] Verificando la relectura"));
+
+    CHECK_EQ(wizard_step_label(WizardStep::Partition), std::string("Particionar"));
+    CHECK_EQ(wizard_dots(WizardStep::Format), std::string("[##>---]"));
+    CHECK(wizard_phase_label(WizardStep::Partition).find("FASE 1") !=
+          std::string::npos);
+    CHECK(wizard_phase_label(WizardStep::Write).find("FASE 2") !=
+          std::string::npos);
+    CHECK(wizard_step_for_stage(PrepStage::Building) ==
+          WizardStep::Partition);
+    CHECK(wizard_step_for_stage(PrepStage::Writing) == WizardStep::Write);
+    CHECK(wizard_failed_label(PrepStage::Building).find("Particionar") !=
+          std::string::npos);
 }
 
 void test_narrow_layout() {
@@ -62,9 +84,9 @@ void test_narrow_layout() {
     auto root = layout(app, 80, 24);
     CHECK(root != nullptr);
 
+    CHECK_EQ(app.rail_slot()->get_custom_minimum_size().x, 4);
     CHECK(app.split()->get_orientation() ==
           guayaba::SplitOrientation::HorizontalDivider);
-    CHECK(app.split()->get_rect().size.x >= 70);
     const Rect devices = app.devices_panel()->get_rect();
     const Rect details = app.details_panel()->get_rect();
     CHECK(devices.bottom() <= details.top());
@@ -72,11 +94,9 @@ void test_narrow_layout() {
     CHECK(details.right() <= 80);
     CHECK(details.bottom() <= 24);
 
-    const Rect prepare = app.prepare_button()->get_rect();
-    const Rect export_button = app.export_button()->get_rect();
-    CHECK(prepare.right() <= 80);
-    CHECK(export_button.right() <= 80);
-    CHECK(prepare.bottom() <= 24);
+    CHECK(app.prepare_button()->get_rect().right() <= 80);
+    CHECK(app.export_button()->get_rect().right() <= 80);
+    CHECK(app.prepare_button()->get_rect().bottom() <= 24);
 
     CHECK_EQ(app.device_list()->item_count(), std::size_t{4});
 
@@ -84,7 +104,7 @@ void test_narrow_layout() {
     root->draw(renderer, Rect::from_size(Vec2{80, 24}));
 }
 
-void test_wide_layout() {
+void test_wide_layout_and_expanded_rail() {
     FakePrepController controller;
     AppScene app(controller);
     auto root = layout(app, 120, 40);
@@ -92,13 +112,20 @@ void test_wide_layout() {
 
     CHECK(app.split()->get_orientation() ==
           guayaba::SplitOrientation::VerticalDivider);
-    CHECK(app.split()->get_rect().size.x >= 100);
     const Rect devices = app.devices_panel()->get_rect();
     const Rect details = app.details_panel()->get_rect();
     CHECK(devices.right() <= details.left());
     CHECK(details.right() <= 120);
     CHECK(details.bottom() <= 40);
     CHECK(app.prepare_button()->get_rect().right() <= details.right());
+
+    app.handle_key(Key::F9);
+    CHECK(app.state().rail_expanded);
+    CHECK_EQ(app.rail_slot()->get_custom_minimum_size().x, 18);
+    root->update_layout(Rect::from_size(Vec2{120, 40}));
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 18);
+    CHECK(app.split()->get_orientation() ==
+          guayaba::SplitOrientation::VerticalDivider);
 
     guayaba::ConsoleRenderer renderer(Vec2{120, 40}, nullptr);
     root->draw(renderer, Rect::from_size(Vec2{120, 40}));
@@ -113,9 +140,11 @@ void test_no_privileges() {
 
     CHECK(!app.state().can_write);
     CHECK(app.prepare_button()->is_disabled());
+    CHECK(app.status_label()->get_text().find("permisos") != std::string::npos);
+
     app.handle_key(Key::ENTER);
     CHECK(app.state().screen == UiScreen::Main);
-    CHECK(app.state().status.find("permisos") != std::string::npos);
+    CHECK(app.status_label()->get_text().find("permisos") != std::string::npos);
 }
 
 void test_fake_flow_cancel_during_write() {
@@ -132,17 +161,15 @@ void test_fake_flow_cancel_during_write() {
     CHECK_EQ(app.state().selected, std::size_t{0});
 
     app.handle_key(Key::ENTER);
+    app.settle_transition();
     CHECK(app.state().screen == UiScreen::Confirm);
     CHECK(!app.warning_checkbox()->is_checked());
 
     root->update_layout(Rect::from_size(Vec2{80, 24}));
-    const auto confirm_panel =
-        root->get_node<guayaba::PanelContainer>("screen/content/confirm");
-    CHECK(confirm_panel->get_rect().right() <= 80);
-    CHECK(confirm_panel->get_rect().bottom() <= 24);
-    const auto overwrite = confirm_panel->get_node<guayaba::Button>(
-        "confirm_layout/confirm_buttons/confirm_overwrite");
-    CHECK(confirm_panel->get_rect().contains(overwrite->get_rect()));
+    CHECK(app.confirm_panel()->get_rect().right() <= 80);
+    CHECK(app.confirm_panel()->get_rect().bottom() <= 24);
+    CHECK(app.confirm_kicker()->get_text().find("CONFIRMAR") !=
+          std::string::npos);
 
     // Sin la casilla, Enter no abre el dispositivo ni inicia el flujo.
     app.handle_key(Key::ENTER);
@@ -158,18 +185,18 @@ void test_fake_flow_cancel_during_write() {
     controller.advance();
     app.tick();
     CHECK_EQ(app.state().progress.stage, PrepStage::Writing);
+    CHECK(app.step_title()->get_text() == std::string("Escribir"));
     CHECK_EQ(app.progress_bar()->get_value(), 55.0);
 
+    app.settle_transition();
     root->update_layout(Rect::from_size(Vec2{80, 24}));
-    const auto progress_panel =
-        root->get_node<guayaba::PanelContainer>("screen/content/progress");
-    CHECK(progress_panel->get_rect().right() <= 80);
-    CHECK(progress_panel->get_rect().bottom() <= 24);
-    const auto cancel = progress_panel->get_node<guayaba::Button>(
-        "progress_layout/progress_cancel");
-    CHECK(progress_panel->get_rect().contains(cancel->get_rect()));
+    CHECK(app.step_panel()->get_rect().right() <= 80);
+    CHECK(app.step_panel()->get_rect().bottom() <= 24);
+    CHECK(app.cancel_button()->get_rect().right() <= 80);
+    CHECK(app.cancel_button()->get_rect().bottom() <= 24);
 
     app.handle_key(Key::ESCAPE);
+    app.settle_transition();
     CHECK(app.state().screen == UiScreen::Result);
     CHECK(app.state().result.outcome == PrepOutcome::Incomplete);
     CHECK_EQ(booteable::ui::outcome_color(app.state().result.outcome),
@@ -177,15 +204,11 @@ void test_fake_flow_cancel_during_write() {
     CHECK_EQ(app.result_outcome()->get_text(), std::string("INCOMPLETO"));
 
     root->update_layout(Rect::from_size(Vec2{80, 24}));
-    const auto result_panel =
-        root->get_node<guayaba::PanelContainer>("screen/content/result");
-    CHECK(result_panel->get_rect().right() <= 80);
-    CHECK(result_panel->get_rect().bottom() <= 24);
-    const auto back = result_panel->get_node<guayaba::Button>(
-        "result_layout/result_buttons/result_back");
-    CHECK(result_panel->get_rect().contains(back->get_rect()));
+    CHECK(app.result_panel()->get_rect().right() <= 80);
+    CHECK(app.result_panel()->get_rect().bottom() <= 24);
 
     app.handle_key(Key::ESCAPE);
+    app.settle_transition();
     CHECK(app.state().screen == UiScreen::Main);
 }
 
@@ -196,9 +219,7 @@ void test_fake_flow_verified() {
     auto root = layout(app, 80, 24);
     CHECK(root != nullptr);
 
-    app.handle_key(Key::ENTER);
-    app.set_confirmed(true);
-    app.handle_key(Key::ENTER);
+    start_flow(app);
     CHECK(app.state().screen == UiScreen::Progress);
 
     for (int step = 0; step < 6; ++step) {
@@ -206,11 +227,12 @@ void test_fake_flow_verified() {
         app.tick();
     }
 
+    app.settle_transition();
     CHECK(app.state().screen == UiScreen::Result);
     CHECK(app.state().result.outcome == PrepOutcome::Verified);
     CHECK_EQ(app.result_outcome()->get_text(), std::string("VERIFICADO"));
-    CHECK_EQ(app.state().result.outcome, PrepOutcome::Verified);
     CHECK(app.state().result.verified);
+    CHECK_EQ(app.progress_bar()->get_value(), 100.0);
 }
 
 void test_rejected_device_does_not_open_dialog() {
@@ -240,7 +262,7 @@ void test_split_ratio_persists() {
     CHECK(std::fabs(app.split()->get_split_ratio() - 0.7f) < 0.001f);
 }
 
-void test_confirmation_is_modal_and_uses_snapshot() {
+void test_confirmation_is_full_screen_and_uses_snapshot() {
     FakePrepController controller;
     controller.set_manual_steps(true);
     AppScene app(controller);
@@ -250,30 +272,30 @@ void test_confirmation_is_modal_and_uses_snapshot() {
     app.handle_key(Key::ENTER);
     CHECK(app.state().screen == UiScreen::Confirm);
 
-    auto main_panel =
-        root->get_node<guayaba::PanelContainer>("screen/content/main");
-    CHECK(!main_panel->is_visible());
+    app.settle_transition();
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    CHECK(!app.main_panel()->is_visible());
+    CHECK(app.confirm_panel()->is_visible());
+    CHECK(app.confirm_panel()->get_rect().right() <= 80);
+    CHECK(app.confirm_panel()->get_rect().bottom() <= 24);
 
     const std::size_t selected = app.state().selected;
-    app.select(2); // Debe ignorarse: el diálogo es modal.
+    app.select(2); // Debe ignorarse: la confirmación es una pantalla propia.
     CHECK_EQ(app.state().selected, selected);
 
-    auto summary = root->get_node<guayaba::Label>(
-        "screen/content/confirm/confirm_layout/confirm_summary");
-    CHECK(summary->get_text().find("/dev/sdb") != std::string::npos);
+    const std::string summary = app.warning_checkbox()->get_text();
+    CHECK(summary.find("/dev/sdb") != std::string::npos);
 
     app.handle_key(Key::ESCAPE);
+    app.settle_transition();
     CHECK(app.state().screen == UiScreen::Main);
-    CHECK(main_panel->is_visible());
+    CHECK(app.main_panel()->is_visible());
 
     // El flujo usa la instantánea del destino, no una selección posterior.
-    app.handle_key(Key::ENTER);
-    app.set_confirmed(true);
-    app.handle_key(Key::ENTER);
+    start_flow(app);
     CHECK(app.state().screen == UiScreen::Progress);
-    auto title = root->get_node<guayaba::Label>(
-        "screen/content/progress/progress_layout/progress_title");
-    CHECK(title->get_text().find("/dev/sdb") != std::string::npos);
+    CHECK(app.step_title()->get_text() == std::string("Particionar"));
+    CHECK(app.step_log()->get_text().find("/dev/sdb") != std::string::npos);
 }
 
 void test_disabled_button_keeps_frame() {
@@ -298,8 +320,164 @@ void test_export_goes_through_controller() {
 
     app.request_export();
     CHECK(controller.has_export());
+    CHECK(controller.last_export_geometry() ==
+          booteable::ExportGeometry::Selected);
     CHECK_EQ(controller.last_export().device.path, std::string("/dev/sdb"));
     CHECK(app.state().status.find("Imagen exportada") != std::string::npos);
+}
+
+void test_export_page_standard_and_selected() {
+    FakePrepController controller;
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    app.handle_key(Key::F8);
+    CHECK(app.state().export_page);
+    CHECK(app.state().rail_expanded);
+    CHECK(app.export_standard_button()->is_visible());
+    CHECK(!app.export_selected_button()->is_disabled());
+
+    app.request_export_standard();
+    CHECK(controller.has_export());
+    CHECK(controller.last_export_geometry() ==
+          booteable::ExportGeometry::Standard);
+    CHECK_EQ(controller.last_export().device.size_bytes,
+             booteable::kMib * 64ull);
+    CHECK_EQ(controller.last_export().device.logical_sector, 512u);
+    CHECK(app.state().status.find("64 MiB") != std::string::npos);
+    CHECK(!app.state().export_page);
+
+    app.handle_key(Key::F8);
+    CHECK(app.state().export_page);
+    app.request_export_selected();
+    CHECK(controller.last_export_geometry() ==
+          booteable::ExportGeometry::Selected);
+    CHECK(app.state().status.find("Imagen exportada") != std::string::npos);
+}
+
+void test_export_selected_disabled_without_devices() {
+    FakePrepController controller({});
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    app.handle_key(Key::F8);
+    CHECK(app.state().export_page);
+    CHECK(app.export_selected_button()->is_disabled());
+    CHECK(!app.export_standard_button()->is_disabled());
+
+    app.request_export_standard();
+    CHECK(controller.has_export());
+    CHECK(controller.last_export_geometry() ==
+          booteable::ExportGeometry::Standard);
+}
+
+void test_rail_toggle_updates_stage_width() {
+    FakePrepController controller;
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 4);
+    CHECK_EQ(app.stage()->get_rect().size.x, 76);
+
+    app.handle_key(Key::F9);
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 18);
+    CHECK_EQ(app.stage()->get_rect().size.x, 62);
+    CHECK(app.split()->get_orientation() ==
+          guayaba::SplitOrientation::HorizontalDivider);
+
+    app.handle_key(Key::F9);
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 4);
+    CHECK_EQ(app.stage()->get_rect().size.x, 76);
+}
+
+void test_expanded_rail_keeps_screens_inside() {
+    FakePrepController controller;
+    controller.set_manual_steps(true);
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    app.handle_key(Key::F9);
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    CHECK_EQ(app.rail_slot()->get_rect().size.x, 18);
+    CHECK_EQ(app.stage()->get_rect().size.x, 62);
+
+    app.handle_key(Key::ENTER);
+    app.settle_transition();
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    CHECK(app.confirm_panel()->get_rect().left() >= 18);
+    CHECK(app.confirm_panel()->get_rect().right() <= 80);
+    CHECK(app.confirm_panel()->get_rect().bottom() <= 24);
+
+    app.set_confirmed(true);
+    app.handle_key(Key::ENTER);
+    app.settle_transition();
+    root->update_layout(Rect::from_size(Vec2{80, 24}));
+    CHECK(app.step_panel()->get_rect().bottom() <= 24);
+    CHECK(app.cancel_button()->get_rect().left() >= 18);
+    CHECK(app.cancel_button()->get_rect().right() <= 80);
+    CHECK(app.cancel_button()->get_rect().bottom() <= 24);
+}
+
+void test_time_based_partition_and_format() {
+    FakePrepController controller;
+    controller.set_manual_steps(true);
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    start_flow(app);
+    CHECK(app.step_title()->get_text() == std::string("Particionar"));
+
+    app.animate(0.3);
+    CHECK(app.step_title()->get_text() == std::string("Particionar"));
+
+    app.animate(0.4);
+    CHECK(app.step_title()->get_text() == std::string("Formatear"));
+
+    // Una etapa real pisa el temporizador de inmediato.
+    controller.advance(); // Building -> Unmounting
+    app.tick();
+    CHECK(app.step_title()->get_text() == std::string("Escribir"));
+}
+
+void test_building_failure_marks_image_phase() {
+    FakePrepController controller;
+    controller.fail_next(PrepOutcome::BuildError, PrepStage::Building,
+                         "falló la GPT simulada");
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    start_flow(app);
+    app.settle_transition();
+    CHECK(app.state().screen == UiScreen::Result);
+    CHECK(app.state().result.outcome == PrepOutcome::BuildError);
+    CHECK(app.result_kicker()->get_text().find("Particionar") !=
+          std::string::npos);
+}
+
+void test_transition_settles_without_overlap() {
+    FakePrepController controller;
+    AppScene app(controller);
+    auto root = layout(app, 80, 24);
+    CHECK(root != nullptr);
+
+    app.handle_key(Key::ENTER);
+    CHECK(app.state().screen == UiScreen::Confirm);
+    CHECK(app.main_panel()->is_visible());
+    CHECK(app.confirm_panel()->is_visible());
+
+    app.settle_transition();
+    CHECK(!app.main_panel()->is_visible());
+    CHECK(app.confirm_panel()->is_visible());
+    CHECK_EQ(app.confirm_panel()->get_anchor_left(), 0.0f);
+    CHECK_EQ(app.confirm_panel()->get_anchor_right(), 1.0f);
 }
 
 void test_f10_notice_survives_tick() {
@@ -309,20 +487,15 @@ void test_f10_notice_survives_tick() {
     auto root = layout(app, 80, 24);
     CHECK(root != nullptr);
 
-    app.handle_key(Key::ENTER);
-    app.set_confirmed(true);
-    app.handle_key(Key::ENTER);
+    start_flow(app);
     CHECK(app.state().screen == UiScreen::Progress);
 
     app.handle_key(Key::F10);
     CHECK(app.state().screen == UiScreen::Progress);
-
-    auto status = root->get_node<guayaba::Label>(
-        "screen/content/progress/progress_layout/progress_status");
-    CHECK(status->get_text().find("cancelá") != std::string::npos);
+    CHECK(app.step_status()->get_text().find("cancelá") != std::string::npos);
 
     app.tick();
-    CHECK(status->get_text().find("cancelá") != std::string::npos);
+    CHECK(app.step_status()->get_text().find("cancelá") != std::string::npos);
 }
 
 void test_modal_blocks_list_clicks() {
@@ -330,6 +503,7 @@ void test_modal_blocks_list_clicks() {
     AppScene app(controller);
     auto root = app.build();
     root->update_layout(Rect::from_size(Vec2{80, 24}));
+    app.settle_transition();
 
     guayaba::SceneManager& manager = guayaba::SceneManager::get_instance();
     manager.change_scene(std::move(root));
@@ -342,6 +516,7 @@ void test_modal_blocks_list_clicks() {
     const Vec2 click{list_rect.pos.x + 1, list_rect.pos.y + 1};
 
     app.handle_key(Key::ENTER);
+    app.settle_transition();
     CHECK(app.state().screen == UiScreen::Confirm);
     const std::size_t selected = app.state().selected;
 
@@ -363,15 +538,22 @@ void test_modal_blocks_list_clicks() {
 void run_ui_flow_tests() {
     test_format();
     test_narrow_layout();
-    test_wide_layout();
+    test_wide_layout_and_expanded_rail();
     test_no_privileges();
     test_fake_flow_cancel_during_write();
     test_fake_flow_verified();
     test_rejected_device_does_not_open_dialog();
     test_split_ratio_persists();
-    test_confirmation_is_modal_and_uses_snapshot();
+    test_confirmation_is_full_screen_and_uses_snapshot();
     test_disabled_button_keeps_frame();
     test_export_goes_through_controller();
+    test_export_page_standard_and_selected();
+    test_export_selected_disabled_without_devices();
+    test_rail_toggle_updates_stage_width();
+    test_expanded_rail_keeps_screens_inside();
+    test_time_based_partition_and_format();
+    test_building_failure_marks_image_phase();
+    test_transition_settles_without_overlap();
     test_f10_notice_survives_tick();
     test_modal_blocks_list_clicks();
 }

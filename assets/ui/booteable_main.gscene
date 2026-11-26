@@ -1,0 +1,157 @@
+# Pantalla del paso 1: detectar y elegir la USB.
+#
+# Se injerta en "content/app_frame/shell/stage_slot" del shell. La única acción
+# sobre la selección es [ Preparar ]; exportar y actualizar viven en el rail.
+
+format = 1
+name = "BooteableMain"
+theme = "booteable.gtheme"
+
+PanelContainer "main" {
+    anchors = "full_rect"
+    style = "panel"
+    clip_children = true
+
+    VBox "main_layout" {
+        anchors = "full_rect"
+        separation = 0
+
+        SplitContainer "main_split" {
+            anchors = "full_rect"
+            custom_minimum_size = [40, 11]
+            grow_x = "both"
+            grow_y = "both"
+            divider_width = 1
+            focus_mode = "none"
+
+            PanelContainer "devices_panel" {
+                anchors = "full_rect"
+                style = "panel"
+                clip_children = true
+
+                VBox "devices_layout" {
+                    anchors = "full_rect"
+                    separation = 0
+
+                    Label "devices_count" {
+                        text = "USB detectadas: 0"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                        text_color = "BRIGHT_WHITE"
+                    }
+
+                    ListView "device_list" {
+                        anchors = "full_rect"
+                        custom_minimum_size = [12, 5]
+                        grow_x = "both"
+                        grow_y = "both"
+                    }
+                }
+            }
+
+            PanelContainer "details_panel" {
+                anchors = "full_rect"
+                style = "panel"
+                clip_children = true
+
+                VBox "details_layout" {
+                    anchors = "full_rect"
+                    separation = 0
+
+                    Label "detail_title" {
+                        text = "Sin dispositivo seleccionado"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                        text_color = "BRIGHT_WHITE"
+                    }
+
+                    Label "detail_model" {
+                        text = "Modelo: -"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                    }
+
+                    Label "detail_capacity" {
+                        text = "Capacidad: -"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                    }
+
+                    Label "detail_serial" {
+                        text = "Serie: -"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                    }
+
+                    Label "detail_by_id" {
+                        text = "by-id: -"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                        text_color = "BRIGHT_BLACK"
+                    }
+
+                    Label "detail_mounts" {
+                        text = "Montajes: -"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                    }
+
+                    Label "detail_safety" {
+                        text = "Seguridad: -"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                    }
+
+                    Label "detail_image" {
+                        text = "Imagen: GPT | ESP FAT32 | etiqueta BOOTEABLE"
+                        custom_minimum_size = [0, 1]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        clip_children = true
+                    }
+
+                    Label "details_spacer" {
+                        anchors = "full_rect"
+                        text = ""
+                        custom_minimum_size = [0, 1]
+                    }
+
+                    HBox "detail_buttons" {
+                        custom_minimum_size = [0, 3]
+                        anchor_right = 1.0
+                        grow_x = "both"
+                        separation = 2
+
+                        Button "prepare" {
+                            text = "[ Preparar USB ]"
+                            custom_minimum_size = [18, 3]
+                            anchor_right = 1.0
+                            grow_x = "both"
+                            text_align = "center"
+                            style.normal = "button.primary.normal"
+                            style.hover = "button.primary.hover"
+                            style.pressed = "button.primary.pressed"
+                            style.disabled = "button.primary.disabled"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

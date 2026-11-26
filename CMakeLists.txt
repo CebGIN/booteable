@@ -132,24 +132,44 @@ booteable_warnings(booteable_core)
 # --- UI declarativa --------------------------------------------------------------
 # La estructura y el tema viven en assets/ui/ y se incrustan como texto para que
 # el binario no dependa del directorio de trabajo ni de archivos en runtime.
+# El formato .gscene no compone escenas, así que cada pantalla es un archivo con
+# su propio root y AppScene las injerta bajo slots comunes.
 set(UI_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui")
-set(UI_SCENE_FILE "${UI_ASSETS_DIR}/booteable.gscene")
+set(UI_SCENES
+    "shell=${UI_ASSETS_DIR}/booteable.gscene"
+    "rail=${UI_ASSETS_DIR}/booteable_rail.gscene"
+    "main=${UI_ASSETS_DIR}/booteable_main.gscene"
+    "steps=${UI_ASSETS_DIR}/booteable_steps.gscene"
+    "confirm=${UI_ASSETS_DIR}/booteable_confirm.gscene"
+    "result=${UI_ASSETS_DIR}/booteable_result.gscene")
+set(UI_SCENE_FILES
+    "${UI_ASSETS_DIR}/booteable.gscene"
+    "${UI_ASSETS_DIR}/booteable_rail.gscene"
+    "${UI_ASSETS_DIR}/booteable_main.gscene"
+    "${UI_ASSETS_DIR}/booteable_steps.gscene"
+    "${UI_ASSETS_DIR}/booteable_confirm.gscene"
+    "${UI_ASSETS_DIR}/booteable_result.gscene")
 set(UI_THEME_FILE "${UI_ASSETS_DIR}/booteable.gtheme")
 set(UI_ASSETS_HPP "${GENERATED_DIR}/EmbeddedUiAssets.hpp")
 set(UI_ASSETS_CPP "${GENERATED_DIR}/EmbeddedUiAssets.cpp")
+
+set(UI_SCENE_ARGS)
+foreach(scene IN LISTS UI_SCENES)
+    list(APPEND UI_SCENE_ARGS --scene "${scene}")
+endforeach()
 
 add_custom_command(
     OUTPUT "${UI_ASSETS_HPP}" "${UI_ASSETS_CPP}"
     COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed-ui.py"
-            --scene "${UI_SCENE_FILE}"
+            ${UI_SCENE_ARGS}
             --theme "${UI_THEME_FILE}"
             --output-dir "${GENERATED_DIR}"
     DEPENDS
-        "${UI_SCENE_FILE}"
+        ${UI_SCENE_FILES}
         "${UI_THEME_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed-ui.py"
-    COMMENT "Incrustando la escena y el tema de la UI"
+    COMMENT "Incrustando las escenas y el tema de la UI"
     VERBATIM)
 
 add_custom_target(booteable_ui_assets DEPENDS "${UI_ASSETS_CPP}")
@@ -157,9 +177,10 @@ add_custom_target(booteable_ui_assets DEPENDS "${UI_ASSETS_CPP}")
 # --- UI --------------------------------------------------------------------------
 add_library(booteable_ui STATIC
     src/ui/AppScene.cpp
+    src/ui/RailScene.cpp
     src/ui/MainScene.cpp
-    src/ui/ConfirmDialog.cpp
-    src/ui/ProgressScene.cpp
+    src/ui/ConfirmScene.cpp
+    src/ui/StepScene.cpp
     src/ui/ResultScene.cpp
     src/ui/UiAssets.cpp
     src/ui/UiFormat.cpp

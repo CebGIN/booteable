@@ -52,6 +52,36 @@ std::string device_row(const DeviceInfo& device);
 // "[x] hecha", "[>] en curso" o "[ ] pendiente".
 std::string progress_step(PrepStage current, PrepStage step);
 
+// Pasos visibles del wizard. El orden es el del recorrido del usuario, no el de
+// PrepStage: la construcción de la imagen cubre Particionar y Formatear.
+enum class WizardStep {
+    Detect = 1,
+    Partition = 2,
+    Format = 3,
+    Write = 4,
+    Sync = 5,
+    Verify = 6,
+};
+
+constexpr int kWizardStepCount = 6;
+
+int wizard_step_number(WizardStep step);
+std::string wizard_step_label(WizardStep step);
+std::string wizard_step_description(WizardStep step);
+std::string wizard_phase_label(WizardStep step);
+std::string wizard_kicker(WizardStep step);
+
+// Paso que corresponde a una etapa real. La UI decide el caso ambiguo de
+// Validating después de Building: antes es preparación, después es escritura.
+WizardStep wizard_step_for_stage(PrepStage stage);
+
+// Etiqueta del paso fallido para ResultScene. Building no distingue si falló la
+// GPT o el FAT32, así que se informa la fase completa.
+std::string wizard_failed_label(PrepStage stage);
+
+// Indicador compacto de seis celdas: "[##>---]" para el paso actual 3.
+std::string wizard_dots(WizardStep current);
+
 } // namespace booteable::ui
 
 #endif // BOOTEABLE_UI_UIFORMAT_HPP

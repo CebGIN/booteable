@@ -1,0 +1,98 @@
+# Pantalla de confirmación del paso 1.
+#
+# Es una pantalla completa del wizard, no un overlay: AppScene la desliza igual
+# que los pasos y oculta el panel principal.
+
+format = 1
+name = "BooteableConfirm"
+theme = "booteable.gtheme"
+
+PanelContainer "confirm" {
+    visible = false
+    anchors = "full_rect"
+    style = "confirm_panel"
+    clip_children = true
+
+    VBox "confirm_layout" {
+        anchors = "full_rect"
+        separation = 0
+
+        Label "confirm_kicker" {
+            text = "PASO 1 DE 6 · CONFIRMAR"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_RED"
+        }
+
+        Label "confirm_summary" {
+            text = "Destino: -"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_WHITE"
+        }
+
+        Label "confirm_image" {
+            text = "Imagen: GPT | ESP FAT32 | EFI/BOOT/BOOTX64.EFI"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_BLACK"
+        }
+
+        Label "confirm_warning" {
+            text = "Se perderá todo el contenido del dispositivo."
+            custom_minimum_size = [0, 2]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_RED"
+        }
+
+        CheckBox "confirm_checkbox" {
+            text = "Entiendo que se perderá todo el contenido"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_color = "BRIGHT_YELLOW"
+        }
+
+        Label "confirm_spacer" {
+            anchors = "full_rect"
+            text = ""
+            custom_minimum_size = [0, 1]
+        }
+
+        HBox "confirm_buttons" {
+            custom_minimum_size = [0, 3]
+            separation = 2
+
+            Button "confirm_back" {
+                text = "[ Volver ]"
+                custom_minimum_size = [14, 3]
+            }
+
+            Button "confirm_overwrite" {
+                text = "[ Sobrescribir y preparar ]"
+                custom_minimum_size = [28, 3]
+                style.normal = "button.danger.normal"
+                style.hover = "button.danger.hover"
+                style.pressed = "button.danger.pressed"
+                style.disabled = "button.danger.disabled"
+            }
+        }
+
+        Label "confirm_status" {
+            text = ""
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_YELLOW"
+        }
+    }
+}

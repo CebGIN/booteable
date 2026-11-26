@@ -1,0 +1,136 @@
+# Rail de herramientas de booteable.
+#
+# Se injerta en "content/app_frame/rail_slot" del shell. Las etiquetas cortas
+# [E] [A] [S] y las acciones contextuales las cambia AppScene::refresh_rail().
+# El ancho lo fija el slot (4 plegado, 18 desplegado), no este panel.
+
+format = 1
+name = "BooteableRail"
+theme = "booteable.gtheme"
+
+PanelContainer "rail" {
+    anchors = "full_rect"
+    style = "rail"
+    clip_children = true
+
+    VBox "rail_layout" {
+        anchors = "full_rect"
+        separation = 0
+
+        Label "rail_title" {
+            text = ""
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_CYAN"
+        }
+
+        Button "rail_export" {
+            text = "[E]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_refresh" {
+            text = "[A]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_back" {
+            visible = false
+            text = "[V]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_cancel" {
+            visible = false
+            text = "[X]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_exit" {
+            text = "[S]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_export_64" {
+            visible = false
+            text = "[ 64 MiB ]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_export_selected" {
+            visible = false
+            text = "[ /dev/sdb ]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Button "rail_export_back" {
+            visible = false
+            text = "[ Volver ]"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            text_align = "center"
+            style.normal = "button.rail.normal"
+            style.hover = "button.rail.hover"
+            style.pressed = "button.rail.pressed"
+            style.disabled = "button.rail.disabled"
+        }
+
+        Label "rail_spacer" {
+            anchors = "full_rect"
+            text = ""
+            custom_minimum_size = [0, 1]
+        }
+    }
+}

@@ -1,7 +1,9 @@
-// Validación headless de los assets declarativos de la UI: el .gscene y el
-// .gtheme incrustados se parsean, se validan y producen el árbol esperado.
+// Validación headless de las escenas y el tema declarativos: cada .gscene se
+// parsea y valida por separado, y build_ui_assets() compone los roots con un
+// tema compartido.
 
 #include <string>
+#include <vector>
 
 #include <guayaba/Guayaba.hpp>
 
@@ -13,24 +15,29 @@ namespace {
 using guayaba::Button;
 using guayaba::CheckBox;
 using guayaba::Control;
+using guayaba::HBox;
 using guayaba::Label;
 using guayaba::ListView;
 using guayaba::PanelContainer;
 using guayaba::ProgressBar;
-using guayaba::SplitContainer;
 
-void test_scene_parses_and_validates() {
-    const guayaba::SceneParseResult parsed = guayaba::parse_scene(
-        booteable::ui::scene_text(),
-        guayaba::SceneParseOptions{"booteable.gscene"});
-    CHECK(parsed.ok());
-    CHECK(parsed.document.root != nullptr);
-    CHECK_EQ(parsed.document.root->type, std::string("Control"));
-    CHECK_EQ(parsed.document.root->name, std::string("content"));
+void test_scenes_parse_and_validate() {
+    const std::vector<booteable::ui::UiSceneSource> sources =
+        booteable::ui::scene_sources();
+    CHECK_EQ(sources.size(), std::size_t{6});
 
-    const std::vector<guayaba::SceneDiagnostic> diagnostics =
-        guayaba::validate_scene(parsed.document, true, "booteable.gscene");
-    CHECK(!guayaba::has_error(diagnostics));
+    for (const booteable::ui::UiSceneSource& source : sources) {
+        const guayaba::SceneParseOptions options{std::string(source.source)};
+        const guayaba::SceneParseResult parsed =
+            guayaba::parse_scene(source.text, options);
+        CHECK(parsed.ok());
+        CHECK(parsed.document.root != nullptr);
+
+        const std::vector<guayaba::SceneDiagnostic> diagnostics =
+            guayaba::validate_scene(parsed.document, true,
+                                    std::string(source.source));
+        CHECK(!guayaba::has_error(diagnostics));
+    }
 }
 
 void test_theme_parses_and_builds() {
@@ -44,10 +51,12 @@ void test_theme_parses_and_builds() {
     CHECK(built.ok());
     CHECK(built.theme != nullptr);
     CHECK(built.theme->has_style("panel"));
+    CHECK(built.theme->has_style("rail"));
+    CHECK(built.theme->has_style("step_panel"));
+    CHECK(built.theme->has_style("spinner"));
     CHECK(built.theme->has_style("button.normal"));
-    CHECK(built.theme->has_style("button.hover"));
-    CHECK(built.theme->has_style("button.pressed"));
-    CHECK(built.theme->has_style("button.disabled"));
+    CHECK(built.theme->has_style("button.rail.normal"));
+    CHECK(built.theme->has_style("button.primary.normal"));
     CHECK(built.theme->has_style("button.danger.normal"));
     CHECK(built.theme->has_style("list_view"));
     CHECK(built.theme->has_style("progress_bar"));
@@ -56,43 +65,71 @@ void test_theme_parses_and_builds() {
     CHECK(built.theme->has_color("selection.background"));
 }
 
-void test_scene_builds_expected_widgets() {
-    guayaba::SceneAsset asset = booteable::ui::build_ui_asset();
-    CHECK(asset.root != nullptr);
-    CHECK(asset.theme != nullptr);
+void test_bundle_builds_expected_widgets() {
+    booteable::ui::UiAssetBundle bundle = booteable::ui::build_ui_assets();
+    CHECK(bundle.theme != nullptr);
+    CHECK_EQ(bundle.roots.size(), std::size_t{6});
 
-    guayaba::Node& content = *asset.root;
-    CHECK(content.get_node<PanelContainer>("main").is_valid());
-    CHECK(content.get_node<SplitContainer>("main/main_layout/main_split")
-              .is_valid());
-    CHECK(content
-              .get_node<ListView>(
-                  "main/main_layout/main_split/devices_panel/devices_layout/device_list")
-              .is_valid());
-    CHECK(content
-              .get_node<Button>(
-                  "main/main_layout/main_split/details_panel/details_layout/detail_buttons/prepare")
-              .is_valid());
-    CHECK(content.get_node<PanelContainer>("confirm").is_valid());
-    CHECK(content.get_node<CheckBox>("confirm/confirm_layout/confirm_checkbox")
-              .is_valid());
-    CHECK(content.get_node<ProgressBar>("progress/progress_layout/progress_bar")
-              .is_valid());
-    CHECK(content.get_node<Label>("result/result_layout/result_outcome")
+    const auto shell = booteable::ui::take_root(bundle, "shell");
+    CHECK(shell != nullptr);
+    CHECK(shell->get_node<HBox>("app_frame").is_valid());
+    CHECK(shell->get_node<Control>("app_frame/rail_slot").is_valid());
+    CHECK(shell->get_node<Control>("app_frame/shell/stage_slot").is_valid());
+
+    const auto rail = booteable::ui::take_root(bundle, "rail");
+    CHECK(rail != nullptr);
+    CHECK_EQ(rail->get_name(), std::string("rail"));
+    CHECK(rail->get_node<Button>("rail_layout/rail_export").is_valid());
+    CHECK(rail->get_node<Button>("rail_layout/rail_export_64").is_valid());
+    CHECK(rail->get_node<Button>("rail_layout/rail_export_selected")
               .is_valid());
 
-    // El panel de confirmación empieza oculto y el principal, visible.
-    CHECK(!content.get_node<PanelContainer>("confirm")->is_visible());
-    CHECK(content.get_node<PanelContainer>("main")->is_visible());
+    const auto main = booteable::ui::take_root(bundle, "main");
+    CHECK(main != nullptr);
+    CHECK(main->get_node<ListView>(
+                 "main_layout/main_split/devices_panel/devices_layout/"
+                 "device_list")
+              .is_valid());
+    CHECK(main->get_node<Button>(
+                 "main_layout/main_split/details_panel/details_layout/"
+                 "detail_buttons/prepare")
+              .is_valid());
 
-    content.update_layout(guayaba::Rect::from_size(guayaba::Vec2{80, 24}));
-    CHECK(content.get_node<PanelContainer>("main")->get_rect().right() <= 80);
+    const auto steps = booteable::ui::take_root(bundle, "steps");
+    CHECK(steps != nullptr);
+    CHECK(steps->get_node<PanelContainer>("step_a").is_valid());
+    CHECK(steps->get_node<PanelContainer>("step_b").is_valid());
+    CHECK(steps->get_node<Label>("step_a/step_a_layout/step_a_title")
+              .is_valid());
+    CHECK(!steps->get_node<PanelContainer>("step_a")->is_visible());
+    CHECK(!steps->get_node<PanelContainer>("step_b")->is_visible());
+
+    const auto confirm = booteable::ui::take_root(bundle, "confirm");
+    CHECK(confirm != nullptr);
+    CHECK(confirm->get_node<CheckBox>("confirm_layout/confirm_checkbox")
+              .is_valid());
+    CHECK(!confirm->is_visible());
+
+    const auto result = booteable::ui::take_root(bundle, "result");
+    CHECK(result != nullptr);
+    CHECK(result->get_node<Label>("result_layout/result_outcome").is_valid());
+    CHECK(!result->is_visible());
+
+    // Un root de cada escena mide lo que le da el slot; no se exige tamaño
+    // propio porque la composición la hace AppScene.
+    const guayaba::Rect box = guayaba::Rect::from_size(
+        guayaba::Vec2{80, 24});
+    shell->update_layout(box);
+    auto* shell_control = dynamic_cast<guayaba::Control*>(shell.get());
+    CHECK(shell_control != nullptr);
+    CHECK(shell_control->get_rect().right() <= 80);
+    CHECK(shell_control->get_rect().bottom() <= 24);
 }
 
 } // namespace
 
 void run_ui_scene_tests() {
-    test_scene_parses_and_validates();
+    test_scenes_parse_and_validate();
     test_theme_parses_and_builds();
-    test_scene_builds_expected_widgets();
+    test_bundle_builds_expected_widgets();
 }

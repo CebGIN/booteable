@@ -305,6 +305,10 @@ void test_export_without_privileges_from_ui() {
     CHECK(!app.state().can_write);
     CHECK(app.prepare_button()->is_disabled());
     app.handle_key(guayaba::Key::F8);
+    CHECK(app.state().export_page);
+    CHECK_EQ(runner.builds.load(), 0);
+
+    app.request_export_standard();
     CHECK_EQ(runner.builds.load(), 1);
     CHECK(app.state().status.find("exportada") != std::string::npos);
 }

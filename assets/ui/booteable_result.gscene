@@ -1,0 +1,105 @@
+# Pantalla de resultado del wizard.
+#
+# Se injerta en "content/app_frame/shell/stage_slot" del shell. El paso fallido
+# se marca en "result_kicker" y "result_stage"; nunca se muestra VERIFICADO si
+# la relectura no coincidió.
+
+format = 1
+name = "BooteableResult"
+theme = "booteable.gtheme"
+
+PanelContainer "result" {
+    visible = false
+    anchors = "full_rect"
+    style = "result_panel"
+    clip_children = true
+
+    VBox "result_layout" {
+        anchors = "full_rect"
+        separation = 0
+
+        Label "result_kicker" {
+            text = "RESULTADO"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_CYAN"
+        }
+
+        Label "result_outcome" {
+            text = "SIN RESULTADO"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_WHITE"
+        }
+
+        Label "result_stage" {
+            text = "Etapa: -"
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_WHITE"
+        }
+
+        Label "result_message" {
+            text = ""
+            custom_minimum_size = [0, 2]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_WHITE"
+        }
+
+        Label "result_details" {
+            text = ""
+            custom_minimum_size = [0, 1]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_BLACK"
+        }
+
+        Label "result_hashes" {
+            text = ""
+            custom_minimum_size = [0, 2]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_BLACK"
+        }
+
+        Label "result_commands" {
+            text = "Prueba virtual:  ./tools/run-qemu.sh --headless --image build/booteable.img\nPrueba física:   reiniciar, abrir el menú de arranque y elegir la USB\nSecure Boot:     debe estar desactivado en el equipo de prueba"
+            custom_minimum_size = [0, 3]
+            anchor_right = 1.0
+            grow_x = "both"
+            clip_children = true
+            text_color = "BRIGHT_CYAN"
+        }
+
+        Label "result_spacer" {
+            anchors = "full_rect"
+            text = ""
+            custom_minimum_size = [0, 1]
+        }
+
+        HBox "result_buttons" {
+            custom_minimum_size = [0, 3]
+            separation = 2
+
+            Button "result_back" {
+                text = "[ Volver ]"
+                custom_minimum_size = [12, 3]
+            }
+
+            Button "result_quit" {
+                text = "[ Salir ]"
+                custom_minimum_size = [10, 3]
+            }
+        }
+    }
+}

@@ -13,6 +13,78 @@ style "panel" {
     margin = [1, 0, 1, 0]
 }
 
+# Rail de herramientas. El fondo distinto separa las acciones del programa de
+# la selección de la USB; no lleva borde para no robar columnas.
+style "rail" {
+    background = "BRIGHT_BLACK"
+    margin = [0, 0, 0, 0]
+}
+
+style "step_panel" {
+    background = "BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "rounded"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "spinner" {
+    border_style = "none"
+    margin = [0, 0, 0, 0]
+}
+
+style "button.rail.normal" {
+    border_style = "none"
+    margin = [0, 0, 0, 0]
+}
+
+style "button.rail.hover" {
+    background = "BLUE"
+    border_style = "none"
+    margin = [0, 0, 0, 0]
+}
+
+style "button.rail.pressed" {
+    background = "BRIGHT_BLUE"
+    border_style = "none"
+    margin = [0, 0, 0, 0]
+}
+
+style "button.rail.disabled" {
+    border_style = "none"
+    margin = [0, 0, 0, 0]
+}
+
+style "button.primary.normal" {
+    border = "BRIGHT_CYAN"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.primary.hover" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.primary.pressed" {
+    background = "BRIGHT_BLACK"
+    border = "BRIGHT_CYAN"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
+style "button.primary.disabled" {
+    border = "BRIGHT_BLACK"
+    border_style = "ascii"
+    border_width = 1
+    margin = [1, 0, 1, 0]
+}
+
 style "confirm_panel" {
     background = "BLACK"
     border = "BRIGHT_RED"
